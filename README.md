@@ -28,7 +28,7 @@ make
 ```
 
 ## demo
-![](./pic/demo.png)
+![](https://github.com/MarinYoung4596/tiny_search_engine/blob/main/pic/demo.png)
 
 # 迭代 & 评估
 ## 训练集
