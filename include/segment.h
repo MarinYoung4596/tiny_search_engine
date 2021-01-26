@@ -48,8 +48,8 @@ public:
     std::string to_str() const;
 
 public:
-    std::size_t token_sign;
-    std::string token;
+    std::size_t token_sign; // term签名
+    std::string token;  // term明文
     uint32_t offset; // offset in unicode
     uint32_t length; // length in unicode
     uint16_t dup; // 表示term第几次出现, 从1开始计数

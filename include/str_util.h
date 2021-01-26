@@ -141,7 +141,7 @@ template <typename ...Args>
 std::string StrUtil::format(const std::string &fmt, const Args &...args) {
     std::ostringstream oss;
     _format_str_helper(oss, fmt, 0, args...);
-    return std::move(oss.str());
+    return oss.str();
 }
 
 template <typename Type, typename ...Args>

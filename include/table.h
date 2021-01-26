@@ -49,10 +49,10 @@ public:
             const TermFreqMap &tf_map,
             float module = 0.0);
 public:
-    std::size_t doc_sign;
-    std::string title;
+    std::size_t doc_sign; // doc签名
+    std::string title; // title明文
     uint32_t title_len; // unicode length
-    std::string url;
+    std::string url; // url明文
     std::vector<TermNode> terms; // title切词
     TermFreqMap term_freq_map; // title中每个term的频次
     float vec_module; // terms tf*idf 向量的模
@@ -84,9 +84,9 @@ public:
             uint32_t tf = 0,
             float idf = 0.0);
 public:
-    std::size_t term_sign;
-    std::string term_txt;
-    uint32_t term_len; // term的长度
+    std::size_t term_sign; // term签名
+    std::string term_txt; // term明文
+    uint32_t term_len; // term长度
     uint32_t term_freq; // term在所有doc中出现的总次数
     float idf;
     std::unordered_set<DocNode, DocNodeHash> docs;
@@ -100,12 +100,12 @@ public:
     void init();
     std::string to_str() const;
 public:
-    std::string query;
+    std::string query; // query明文
     uint32_t query_len; // unicode length
     std::vector<TermNode> terms; // query切词
 	TermFreqMap term_freq_map; // 每个term的出现频次: <sign, freq>
     float vec_module; // terms tf*idf 向量的模
-    std::vector<std::vector<std::string>> syns; /////// TMP
+    std::vector<std::vector<std::string>> syns; // 每个term的同义词改写, 与term切词对齐
 };
 
 // doc相关feature, 描述query与doc的关联程度
@@ -119,8 +119,8 @@ public:
     bool operator < (const ResInfo &rhs) const;
 
 public:
-    std::size_t doc_sign;
-    std::shared_ptr<DocInfo> doc_info;
+    std::size_t doc_sign; // doc签名
+    std::shared_ptr<DocInfo> doc_info; // doc正排信息
     TermFreqMap hit_term_map; // doc与query的term交集: <sign, term在query,doc中的最小频次>
     TermFreqMap hit_syn_map; // query term同义词命中doc的情况: <sign, 同义词term在query中的index>
     uint16_t term_hits; // doc与query的term交集个数(包含重复)
@@ -134,8 +134,9 @@ public:
     int offset_distance;
     int longest_common_subseq;
     int longest_continuous_substr;
-    float edit_ratio;
-    float offset_ratio;
+    float miss; // 未命中term权重比例
+    float extra; // 未命中term长度占比
+    float disorder; // 逆序pair对的比例
 
     // rank score
     float final_score;
@@ -285,27 +286,27 @@ private:
     /**
      * @brief 计算特征
      */
-    void _calculate_features(std::shared_ptr<ResInfo> result);
+    bool _calc_features(std::shared_ptr<ResInfo> result);
     /**
      * @brief 计算主题匹配度
      */
-    bool _calculate_cqr_ctr(std::shared_ptr<ResInfo> result);
+    bool _calc_cqr_ctr(std::shared_ptr<ResInfo> result);
     /**
      * @brief
      */
-    float _vsm(std::shared_ptr<ResInfo> result);
+    bool _calc_vsm(std::shared_ptr<ResInfo> result);
     /**
      * @brief 以term为粒度计算最长公共子序列、最长公共子串长度
      */
-    void _calculate_term_overlap(std::shared_ptr<ResInfo> result);
+    void _calc_term_overlap(std::shared_ptr<ResInfo> result);
     /**
      * @brief 字符串overlap的距离
      */
-    void _calculate_overlap(std::shared_ptr<ResInfo> result);
+    void _calc_overlap(std::shared_ptr<ResInfo> result);
     /**
      * @brief 以term为粒度计算编辑距离、偏移距离
      */
-    void _calculate_distance(std::shared_ptr<ResInfo> result);
+    void _calc_distance(std::shared_ptr<ResInfo> result);
     int _offset_distance_helper(
             const std::vector<TermNode> &terms,
             const TermFreqMap &target_map);
@@ -315,6 +316,10 @@ private:
     int _smallest_distance(
             const std::vector<uint32_t> &left,
             const std::vector<uint32_t> &right);
+    /**
+     * @brief 计算disorder
+     */
+    void _calc_disorder(std::shared_ptr<ResInfo> result);
     /**
      * @brief 结果排序
      */
@@ -336,11 +341,11 @@ private:
 private:
     std::shared_ptr<ConfigUtil> configs;
     std::shared_ptr<Segment> wordseg;
-    std::shared_ptr<Synonyms> wordsyn; // TMP
+    std::shared_ptr<Synonyms> wordsyn;
     std::unique_ptr<Table> table;
 
     std::shared_ptr<QueryInfo> query_info; // 请求query feature特征
-    std::vector<std::shared_ptr<ResInfo>> results_info; // 召回url list
+    std::vector<std::shared_ptr<ResInfo>> results_info; // 召回的doc list
 };
 
 }; // end of namespace tiny_engine

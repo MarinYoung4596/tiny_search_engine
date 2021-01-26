@@ -49,8 +49,8 @@ bool Synonyms::_load_data(const string &file) {
         vec.clear();
         line.clear();
     }
-    LOG_INFO("load syn dict ok, idx_dict[%lu] term_dict[%lu]",
-            idx_terms_dict.size(), term_idx_dict.size());
+    LOG_INFO("load syn dict from %s ok, idx_dict=%lu term_dict=%lu",
+            file.c_str(), idx_terms_dict.size(), term_idx_dict.size());
     return true;
 }
 

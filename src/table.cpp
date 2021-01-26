@@ -18,13 +18,13 @@ DocInfo::DocInfo(
         const std::string &u,
         const std::vector<TermNode> &tms,
         const TermFreqMap &tf_map,
-        float module) :
+        float module_) :
     doc_sign(sign),
     title(t),
     url(u),
     terms(tms),
     term_freq_map(tf_map),
-    vec_module(module) {
+    vec_module(module_) {
         if (!terms.empty()) {
             auto p_last_term = std::prev(terms.end());
             title_len = p_last_term->offset + p_last_term->length;
@@ -87,8 +87,6 @@ ResInfo::ResInfo(
     ctr(0.0),
     edit_distance(0),
     offset_distance(0),
-    edit_ratio(0.0),
-    offset_ratio(0.0),
     final_score(0.0) {
     update_res_info();
 }
@@ -228,7 +226,7 @@ bool Table::_load_stopword(const std::string &file) {
         line = StrUtil::right_trim_with(line, '\n');
         stopword.insert(StrUtil::str_to_sign(line));
     }
-    LOG_INFO("load file[%s] succeed, len[%lu]", file.c_str(), stopword.size());
+    LOG_INFO("load %lu items from %s", stopword.size(), file.c_str());
     return true;
 }
 
@@ -240,9 +238,7 @@ bool Table::load_index_from_file(std::shared_ptr<Segment> wordseg) {
     EXPECT_TRUE_OR_RETURN_LOGGED(
             FileUtil::is_readable(index_file_path),
             false, "file not exist");
-#ifdef DEBUG
     auto time_begin = TimeUtil::get_curr_timeval();
-#endif
     std::ifstream ifs(index_file_path, std::ios::in);
     EXPECT_TRUE_OR_RETURN_LOGGED(ifs.is_open(), false, "open file error");
 
@@ -272,12 +268,10 @@ bool Table::load_index_from_file(std::shared_ptr<Segment> wordseg) {
         }
     }
     ifs.close();
-#ifdef DEBUG
     auto time_end = TimeUtil::get_curr_timeval();
     auto delta_time = TimeUtil::timeval_diff_ms(&time_end, &time_begin);
-    LOG_INFO("table initialized ok, fwd=%lu inv=%lu cost=%lu ms",
-            get_fwd_size(), get_inv_size(), delta_time);
-#endif
+    LOG_INFO("initialize index from %s ok, fwd=%lu inv=%lu cost=%llu ms",
+            index_file_path, get_fwd_size(), get_inv_size(), delta_time);
     return true;
 }
 
@@ -307,18 +301,18 @@ bool Table::_load_inv_table() {
 bool Table::_dump_fwd_table() const {
     // TODO: dump forward table into json str
 #ifdef DEBUG
-	std::ofstream ofs(forward_file_path, std::ofstream::out);
-	EXPECT_TRUE_OR_RETURN(ofs.is_open(), false);
+    std::ofstream ofs(forward_file_path, std::ofstream::out);
+    EXPECT_TRUE_OR_RETURN(ofs.is_open(), false);
     for (auto it = forward_table.begin(); it != forward_table.end(); ++it) {
         auto doc_info = it->second;
         ofs << doc_info->doc_sign \
             << '\t' << doc_info->title \
             << '\n';
     }
-	ofs.close();
-	EXPECT_TRUE_OR_RETURN_LOGGED(
+    ofs.close();
+    EXPECT_TRUE_OR_RETURN_LOGGED(
             FileUtil::generate_md5_file(forward_file_path),
-			false, "generate md5 file failed");
+            false, "generate md5 file failed");
 #endif
     return true;
 }
@@ -326,8 +320,8 @@ bool Table::_dump_fwd_table() const {
 bool Table::_dump_inv_table() const {
     // TODO: dump inverted table into json str
 #ifdef DEBUG
-	std::ofstream ofs(invert_file_path, std::ofstream::out);
-	EXPECT_TRUE_OR_RETURN(ofs.is_open(), false);
+    std::ofstream ofs(invert_file_path, std::ofstream::out);
+    EXPECT_TRUE_OR_RETURN(ofs.is_open(), false);
     for (auto it = invert_table.begin(); it != invert_table.end(); ++it) {
         auto term_info = it->second;
         ofs << term_info->term_txt \
@@ -335,9 +329,10 @@ bool Table::_dump_inv_table() const {
             << '\t' << term_info->docs.size() \
             << '\n';
     }
-	ofs.close();
-	EXPECT_TRUE_OR_RETURN_LOGGED(FileUtil::generate_md5_file(invert_file_path),
-			false, "generate md5 file failed");
+    ofs.close();
+    EXPECT_TRUE_OR_RETURN_LOGGED(
+            FileUtil::generate_md5_file(invert_file_path),
+            false, "generate md5 file failed");
 
 #endif
     return true;
@@ -402,7 +397,7 @@ bool Table::_update_inv_table() {
 
 bool Table::_update_fwd_table() {
     for (auto &item : forward_table) {
-        auto module = 0.0;
+        auto module_ = 0.0;
         for (auto &term : item.second->terms) {
             if (hit_stopword(term.token_sign)) {
                 continue;
@@ -410,9 +405,9 @@ bool Table::_update_fwd_table() {
             auto idf = get_term_idf(term.token_sign);
             auto tf = term.dup;
             term.wei = tf * idf;
-            module += pow(term.wei, 2.0);
+            module_ += pow(term.wei, 2.0);
         }
-        item.second->vec_module = sqrt(module);
+        item.second->vec_module = sqrt(module_);
     }
     return true;
 }
@@ -601,7 +596,7 @@ bool TinyEngine::search(const std::string &query,
 #ifdef DEBUG
     auto time_3rd = TimeUtil::get_curr_timeval();
 #endif
-	_rank_results();
+    _rank_results();
 
     // 4. truncation after final sort
 #ifdef DEBUG
@@ -612,7 +607,6 @@ bool TinyEngine::search(const std::string &query,
             break;
         }
         std::string title = _title_highlight(res);
-        auto &url = res->doc_info->url;
 #ifndef DEBUG
         std::cout << StrUtil::format("{}\t{}\n", query, title);
 #endif
@@ -683,7 +677,7 @@ bool TinyEngine::_fill_query_info(const std::string &query) {
     query_info->init();
     query_info->query = query;
     query_info->terms = std::move(tokens);
-	query_info->term_freq_map = std::move(term_freq_map);
+    query_info->term_freq_map = std::move(term_freq_map);
     query_info->vec_module = sqrt(module);
     if (query_info->terms.size() > 0) {
         auto p_last_term = std::prev(query_info->terms.end());
@@ -716,7 +710,7 @@ bool TinyEngine::_rank_results() {
         if (i >= _max_2nd_sort_num) {
             break;
         }
-        _calculate_features(res);
+        _calc_features(res);
         ++i;
     }
     std::sort(results_info.begin(), results_info.end(),
@@ -726,17 +720,19 @@ bool TinyEngine::_rank_results() {
     return true;
 }
 
-void TinyEngine::_calculate_features(std::shared_ptr<ResInfo> result) {
-    EXPECT_NE_OR_RETURN(nullptr, result, RETURN_ON_VOID);
-
-    result->vsm = _vsm(result);
-    _calculate_cqr_ctr(result);
-    _calculate_overlap(result);
-    _calculate_term_overlap(result);
-    _calculate_distance(result);
+bool TinyEngine::_calc_features(std::shared_ptr<ResInfo> result) {
+    EXPECT_NE_OR_RETURN(nullptr, result, false);
+    EXPECT_FALSE_OR_RETURN(nullptr == result || result->hit_term_map.empty(), false);
+    
+    _calc_vsm(result);
+    _calc_cqr_ctr(result);
+    _calc_overlap(result);
+    _calc_term_overlap(result);
+    _calc_distance(result);
 
     result->final_score = result->vsm;
     //result->final_score = result->cqr * result->ctr;
+    return true;
 }
 
 bool TinyEngine::_get_intersections(
@@ -756,12 +752,11 @@ bool TinyEngine::_get_intersections(
     return true;
 }
 
-float TinyEngine::_vsm(std::shared_ptr<ResInfo> result) {
-    EXPECT_FALSE_OR_RETURN(nullptr == result || result->hit_term_map.empty(), 0.0);
+bool TinyEngine::_calc_vsm(std::shared_ptr<ResInfo> result) {
     auto &req_vec_module = query_info->vec_module;
     auto &res_vec_module = result->doc_info->vec_module;
-    EXPECT_GT_OR_RETURN(abs(req_vec_module - 0.0), EPSILON, 0.0);
-    EXPECT_GT_OR_RETURN(abs(res_vec_module - 0.0), EPSILON, 0.0);
+    EXPECT_GT_OR_RETURN(abs(req_vec_module - 0.0), EPSILON, false);
+    EXPECT_GT_OR_RETURN(abs(res_vec_module - 0.0), EPSILON, false);
 
     // sign : <req, res>
     std::unordered_map<std::size_t, std::pair<float, float>> term_wei_map;
@@ -794,17 +789,19 @@ float TinyEngine::_vsm(std::shared_ptr<ResInfo> result) {
         req_term_vec.push_back(it->second.first);
         res_term_vec.push_back(it->second.second);
     }
-    return MathUtil::dot_product(req_term_vec, res_term_vec) / (req_vec_module * res_vec_module);
+    result->vsm = MathUtil::dot_product(req_term_vec, res_term_vec) / \
+                  (req_vec_module * res_vec_module);
+    return true;
 }
 
-bool TinyEngine::_calculate_cqr_ctr(std::shared_ptr<ResInfo> result) {
+bool TinyEngine::_calc_cqr_ctr(std::shared_ptr<ResInfo> result) {
     float divisor = 0.0;
-	for (const auto &item : result->hit_term_map) {
+    for (const auto &item : result->hit_term_map) {
         if (table->hit_stopword(item.first)) {
             continue;
         }
-		divisor += item.second * table->get_term_idf(item.first);
-	}
+        divisor += item.second * table->get_term_idf(item.first);
+    }
     std::unordered_set<std::size_t> term_set;
     auto &req_terms = query_info->terms;
     float dividend_cqr = 0.0;
@@ -837,9 +834,10 @@ bool TinyEngine::_calculate_cqr_ctr(std::shared_ptr<ResInfo> result) {
         result->cqr = divisor / dividend_cqr;
         result->ctr = divisor / dividend_ctr;
     } catch (std::exception &e) {
-        LOG_WARNING("query[%s] url[%s] zero",
+        LOG_WARNING("query[%s] title[%s] dividend zero",
             query_info->query.c_str(), result->doc_info->title.c_str());
     }
+    result->miss = 1 - result->cqr;
 // #ifdef DEBUG
 //     if (result->cqr < 0.0
 //             || result->cqr > 1.0
@@ -870,7 +868,7 @@ bool TinyEngine::_calculate_cqr_ctr(std::shared_ptr<ResInfo> result) {
     return true;
 }
 
-void TinyEngine::_calculate_term_overlap(std::shared_ptr<ResInfo> result) {
+void TinyEngine::_calc_term_overlap(std::shared_ptr<ResInfo> result) {
     auto &req_terms = query_info->terms;
     auto &res_terms = result->doc_info->terms;
 
@@ -878,16 +876,18 @@ void TinyEngine::_calculate_term_overlap(std::shared_ptr<ResInfo> result) {
     result->longest_continuous_substr = MathUtil::longest_continuous_substring(req_terms, res_terms);
 }
 
-void TinyEngine::_calculate_overlap(std::shared_ptr<ResInfo> result) {
+void TinyEngine::_calc_overlap(std::shared_ptr<ResInfo> result) {
     int overlap = 0;
     for (const auto &item : result->hit_term_map) { // <sign, freq_in_doc>
         auto pterm = table->get_term_info(item.first);
         overlap += pterm->term_len * item.second;
     }
     result->str_overlap_len = overlap;
+    auto query_len = query_info->query_len;
+    result->extra = static_cast<float>(query_len - overlap) / (query_len + 1);
 }
 
-void TinyEngine::_calculate_distance(std::shared_ptr<ResInfo> result) {
+void TinyEngine::_calc_distance(std::shared_ptr<ResInfo> result) {
     auto &req_terms = query_info->terms;
     auto &res_terms = result->doc_info->terms;
 
@@ -974,6 +974,10 @@ int TinyEngine::_smallest_distance(
     return minimum;
 }
 
+void TinyEngine::_calc_disorder(std::shared_ptr<ResInfo> result) {
+    // TODO: term多次命中时order, disorder的处理
+}
+
 std::string TinyEngine::_title_highlight(std::shared_ptr<ResInfo> result) {
     std::string title;
     auto doc = result->doc_info;
@@ -985,7 +989,7 @@ std::string TinyEngine::_title_highlight(std::shared_ptr<ResInfo> result) {
             title += term.token;
         }
     }
-    return std::move(title);
+    return title;
 }
 
 }; // end of namespace tiny_engine
