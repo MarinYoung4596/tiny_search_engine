@@ -2,7 +2,9 @@
 
 # TODO
 - [ ] log_util 完善
-- [ ] lcs, bm25 等相关性计算方法
+- [ ] bm25 等相关性计算方法
+- [ ] feature_manager
+- [ ] xgboost_manager
 - [ ] 多队列召回
 - [ ] 机器学习在搜索中的应用介绍
 - [ ] 深度学习在搜索中的应用介绍

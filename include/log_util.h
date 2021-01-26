@@ -38,15 +38,10 @@ namespace tiny_engine {
 
 #define _LOG_(log_level, log_flag, color, format, arg...) do { \
     std::string stime = TimeUtil::get_curr_format_time("%m-%d %H:%M:%S"); \
-    if (log_level < WARNING_LEVEL) { \
-        fprintf(stdout, "%s%s%s: %s %s:%d %s()] " format "\n", \
+    FILE* fhandler = log_level < WARNING_LEVEL ? stdout : stderr; \
+    fprintf(fhandler, "%s%s%s: %s %s:%d %s()] " format "\n", \
             color, log_flag, COLOR_NONE, \
             stime.c_str(), __FILE__, __LINE__, __FUNCTION__, ## arg); \
-    } else { \
-        fprintf(stderr, "%s%s%s: %s %s:%d %s()] " format "\n", \
-            color, log_flag, COLOR_NONE, \
-            stime.c_str(), __FILE__, __LINE__, __FUNCTION__, ## arg); \
-    } \
 } while (0)
 
 

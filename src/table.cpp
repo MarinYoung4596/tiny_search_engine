@@ -87,6 +87,9 @@ ResInfo::ResInfo(
     ctr(0.0),
     edit_distance(0),
     offset_distance(0),
+    miss(0.0),
+    extra(0.0),
+    disorder(0.0),
     final_score(0.0) {
     update_res_info();
 }
@@ -270,7 +273,7 @@ bool Table::load_index_from_file(std::shared_ptr<Segment> wordseg) {
     ifs.close();
     auto time_end = TimeUtil::get_curr_timeval();
     auto delta_time = TimeUtil::timeval_diff_ms(&time_end, &time_begin);
-    LOG_INFO("initialize index from %s ok, fwd=%lu inv=%lu cost=%llu ms",
+    LOG_INFO("initialize index from %s ok, fwd=%lu inv=%lu cost=%lu ms",
             index_file_path, get_fwd_size(), get_inv_size(), delta_time);
     return true;
 }
@@ -452,7 +455,7 @@ bool Table::recall(std::shared_ptr<QueryInfo> query_info,
             }
             auto len_end = doc_list.size(); //
 #ifdef DEBUG
-            LOG_DEBUG("term[%s] recall[be4=%u after=%u]", t.c_str(), len_begin, len_end);
+            LOG_DEBUG("term[%s] recall[be4=%lu after=%lu]", t.c_str(), len_begin, len_end);
 #endif
         }
         doc_array.push_back(std::make_pair(term.token_sign, doc_list));
@@ -613,18 +616,20 @@ bool TinyEngine::search(const std::string &query,
 
 #ifdef DEBUG
         std::cout << StrUtil::format(
-                "{}\t{}\t{}\tscore={}," \
+                "{}\t{}\t{}\t" \
                 "overlap={},qlen={},tlen={},nqterm={},ntterm={},thits={}," \
+                "miss={},extra={},disorder={}," \
                 "cqr={},ctr={},vsm={},edist={},odist={},lcons={},lcoms={}\n",
-                query,
-                res->doc_info->url, res->doc_info->title,
-                res->final_score,
+                query, res->doc_info->url, res->doc_info->title,
                 res->str_overlap_len,
                 query_info->query_len,
                 res->doc_info->title_len,
                 query_info->terms.size(),
                 res->doc_info->terms.size(),
                 res->term_hits,
+                res->miss,
+                res->extra,
+                res->disorder,
                 MathUtil::round(res->cqr, 2),
                 MathUtil::round(res->ctr, 2),
                 MathUtil::round(res->vsm, 2),
@@ -729,6 +734,7 @@ bool TinyEngine::_calc_features(std::shared_ptr<ResInfo> result) {
     _calc_overlap(result);
     _calc_term_overlap(result);
     _calc_distance(result);
+    _calc_disorder(result);
 
     result->final_score = result->vsm;
     //result->final_score = result->cqr * result->ctr;
@@ -975,7 +981,67 @@ int TinyEngine::_smallest_distance(
 }
 
 void TinyEngine::_calc_disorder(std::shared_ptr<ResInfo> result) {
-    // TODO: term多次命中时order, disorder的处理
+    EXPECT_GT_OR_RETURN(result->hit_term_map.size(), 1, RETURN_ON_VOID); 
+    std::unordered_set<std::size_t> query_order_pair;
+    auto &req_terms = query_info->terms;
+    for (decltype(req_terms.size()) i = 0; i < req_terms.size(); ++i) {
+        auto term_sign_i = req_terms[i].token_sign;
+        if (result->hit_term_map.count(term_sign_i) < 1) {
+            continue;
+        }
+        for (decltype(req_terms.size()) j = i + 1; j < req_terms.size(); ++j) {
+            auto term_sign_j = req_terms[j].token_sign;
+            if (result->hit_term_map.count(term_sign_j) < 1) {
+                continue;
+            }
+            auto pair_sign_ij = _calc_pair_sign(term_sign_i, term_sign_j);
+            query_order_pair.insert(pair_sign_ij);
+        }
+    }
+    /*
+    LOG_DEBUG("hit_term_cnt=%llu, query_order_pair_cnt=%llu", 
+            result->hit_term_map.size(),
+            query_order_pair.size());
+    */
+    auto order_pair_cnt = 0;
+    auto disorder_pair_cnt = 0;
+    auto &res_terms = result->doc_info->terms;
+    for (decltype(res_terms.size()) i = 0; i < res_terms.size(); ++i) {
+        auto term_sign_i = res_terms[i].token_sign;
+        if (result->hit_term_map.count(term_sign_i) < 1) {
+            continue;
+        }
+        for (decltype(res_terms.size()) j = i + 1; j < res_terms.size(); ++j) {
+            auto term_sign_j = res_terms[j].token_sign;
+            if (result->hit_term_map.count(term_sign_j) < 1) {
+                continue;
+            }
+            auto pair_sign_ij = _calc_pair_sign(term_sign_i, term_sign_j);
+            if (query_order_pair.count(pair_sign_ij) > 0) {
+                order_pair_cnt += 1;
+            }
+            auto pair_sign_ji = _calc_pair_sign(term_sign_j, term_sign_i);
+            if (query_order_pair.count(pair_sign_ji) > 0) {
+                disorder_pair_cnt += 1;
+            }
+        }
+    }
+    result->disorder = static_cast<float>(disorder_pair_cnt) / \
+                       (order_pair_cnt + disorder_pair_cnt + 1);
+}
+
+std::size_t TinyEngine::_calc_pair_sign(std::size_t term_sign_1, std::size_t term_sign_2) {
+    std::size_t cut_sign = 0xffffffff;
+    auto sign1 = term_sign_1 & cut_sign;
+    auto sign2 = term_sign_2 & cut_sign;
+    auto pair_sign = (sign1 << 32) | sign2;
+    /*
+    LOG_DEBUG("tsign1=%llu sign1=%llu tsign2=%llu sign2=%llu psign=%llu\n", 
+            term_sign_1, sign1,
+            term_sign_2, sign2,
+            pair_sign);
+    */
+    return pair_sign;
 }
 
 std::string TinyEngine::_title_highlight(std::shared_ptr<ResInfo> result) {

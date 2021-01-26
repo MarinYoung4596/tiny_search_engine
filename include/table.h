@@ -320,6 +320,7 @@ private:
      * @brief º∆À„disorder
      */
     void _calc_disorder(std::shared_ptr<ResInfo> result);
+    std::size_t _calc_pair_sign(std::size_t term_sign_i, std::size_t term_sign_j);
     /**
      * @brief Ω·π˚≈≈–Ú
      */
