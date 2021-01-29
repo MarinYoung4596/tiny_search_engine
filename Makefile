@@ -1,5 +1,5 @@
 INC_DIR = ./include
-SEG_DIR = ./jieba
+OTHER_DIR = ./third_party
 SRC_DIR = ./src
 OBJ_DIR = ./obj
 BIN_DIR = ./bin
@@ -12,7 +12,7 @@ TARGET = main
 BIN_TARGET = $(BIN_DIR)/${TARGET}
 
 CC = g++ -std=c++11
-CXXFLAGS = -g -Wall -D_REENTRANT -IS{INC_DIR} -IS{SEG_DIR}
+CXXFLAGS = -g -Wall -D_REENTRANT -IS{INC_DIR} -IS{OTHER_DIR}
 
 ${BIN_TARGET}:${OBJ}
 	$(CC) $(OBJ) -o $@ $(LIBS)

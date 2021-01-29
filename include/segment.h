@@ -16,7 +16,7 @@
 #include "str_util.h"
 #include "log_util.h"
 #include "config_util.h"
-#include "../jieba/Jieba.hpp"
+#include "../third_party/jieba/Jieba.hpp"
 #include <memory>
 
 namespace tiny_engine {
