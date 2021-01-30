@@ -19,6 +19,7 @@
 #include "config_util.h"
 #include "time_util.h"
 #include "math_util.h"
+#include "feature_mgr.h"
 #include "segment.h"
 #include "synonyms.h"
 
@@ -123,6 +124,7 @@ public:
     std::shared_ptr<DocInfo> doc_info; // doc正排信息
     TermFreqMap hit_term_map; // doc与query的term交集: <sign, term在query,doc中的最小频次>
     TermFreqMap hit_syn_map; // query term同义词命中doc的情况: <sign, 同义词term在query中的index>
+    std::shared_ptr<FeatureMgr> feature_mgr;
     uint16_t term_hits; // doc与query的term交集个数(包含重复)
 
     // qu相关性打分的特征
@@ -295,6 +297,11 @@ private:
      * @brief
      */
     bool _calc_vsm(std::shared_ptr<ResInfo> result);
+    /**
+     *
+     */
+    bool _calc_bm25(std::shared_ptr<ResInfo> result);
+    
     /**
      * @brief 以term为粒度计算最长公共子序列、最长公共子串长度
      */

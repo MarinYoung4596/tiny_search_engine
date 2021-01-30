@@ -92,6 +92,9 @@ ResInfo::ResInfo(
     disorder(0.0),
     final_score(0.0) {
     update_res_info();
+    if (nullptr == feature_mgr) {
+        feature_mgr = std::make_shared<FeatureMgr>();
+    }
 }
 
 void ResInfo::update_res_info() {
@@ -615,29 +618,18 @@ bool TinyEngine::search(const std::string &query,
 #endif
 
 #ifdef DEBUG
-        std::cout << StrUtil::format(
-                "{}\t{}\t{}\t" \
-                "overlap={},qlen={},tlen={},nqterm={},ntterm={},thits={}," \
-                "miss={},extra={},disorder={}," \
-                "cqr={},ctr={},vsm={},edist={},odist={},lcons={},lcoms={}\n",
-                query, res->doc_info->url, res->doc_info->title,
-                res->str_overlap_len,
-                query_info->query_len,
-                res->doc_info->title_len,
-                query_info->terms.size(),
-                res->doc_info->terms.size(),
-                res->term_hits,
-                res->miss,
-                res->extra,
-                res->disorder,
-                MathUtil::round(res->cqr, 2),
-                MathUtil::round(res->ctr, 2),
-                MathUtil::round(res->vsm, 2),
-                res->edit_distance,
-                res->offset_distance,
-                res->longest_continuous_substr,
-                res->longest_common_subseq
-        );
+        res->feature_mgr->add_feature("qlen", query_info->query_len);
+        res->feature_mgr->add_feature("qtcnt", query_info->terms.size());
+        res->feature_mgr->add_feature("tlen", res->doc_info->title_len);
+        res->feature_mgr->add_feature("ttcnt", res->doc_info->terms.size());
+
+         std::cout << StrUtil::format(
+                "{}\t{}\t{}\t{}\n",
+                query,
+                res->doc_info->title,
+                res->doc_info->url,
+                res->feature_mgr->to_str()
+         );
 #endif
         result.push_back(StrStrPair(res->doc_info->title, res->doc_info->url));
     }
@@ -844,33 +836,31 @@ bool TinyEngine::_calc_cqr_ctr(std::shared_ptr<ResInfo> result) {
             query_info->query.c_str(), result->doc_info->title.c_str());
     }
     result->miss = 1 - result->cqr;
-// #ifdef DEBUG
-//     if (result->cqr < 0.0
-//             || result->cqr > 1.0
-//             || result->ctr < 0.0
-//             || result->ctr > 1.0) {
+#if 0
+    if (!GE_LOWER_AND_LE_UPPER(result->cqr, 0.0, 1.0)
+            || !GE_LOWER_AND_LE_UPPER(result->ctr, 0.0, 1.0)) {
 
-//         std::vector<TermNode> intersections;
-//         _get_intersections(result, intersections);
+        std::vector<TermNode> intersections;
+        _get_intersections(result, intersections);
 
-//         std::vector<std::string> vec;
-//         for_each(intersections.begin(), intersections.end(),
-//                 [&vec](const TermNode &node) {
-//                     vec.push_back(node.to_str());
-//                 });
-//         std::string term_str = StrUtil::join(vec.begin(), vec.end(), " | ");
-//         LOG_WARNING("query[%s] title[%s] terms[%s] cqr=%.2f/%.2f=%.2f ctr=%.2f/%.2f=%.2f",
-//              query_info->query.c_str(),
-//              result->doc_info->title.c_str(),
-//              term_str.c_str(),
-//              divisor,
-//              dividend_cqr,
-//              result->cqr,
-//              divisor,
-//              dividend_ctr,
-//              result->ctr);
-//     }
-// #endif
+        std::vector<std::string> vec;
+        for_each(intersections.begin(), intersections.end(),
+                [&vec](const TermNode &node) {
+                    vec.push_back(node.to_str());
+                });
+        std::string term_str = StrUtil::join(vec.begin(), vec.end(), " | ");
+        LOG_WARNING("query[%s] title[%s] terms[%s] cqr=%.2f/%.2f=%.2f ctr=%.2f/%.2f=%.2f",
+             query_info->query.c_str(),
+             result->doc_info->title.c_str(),
+             term_str.c_str(),
+             divisor,
+             dividend_cqr,
+             result->cqr,
+             divisor,
+             dividend_ctr,
+             result->ctr);
+    }
+#endif
     return true;
 }
 
@@ -909,6 +899,9 @@ void TinyEngine::_calc_distance(std::shared_ptr<ResInfo> result) {
 //             res_offsets_dist);
 // #endif
     result->offset_distance = abs(req_offsets_dist - res_offsets_dist);
+
+    result->feature_mgr->add_feature("edit_dist", result->edit_distance);
+    result->feature_mgr->add_feature("off_dist", result->offset_distance);
 }
 
 int TinyEngine::_offset_distance_helper(
@@ -1028,6 +1021,8 @@ void TinyEngine::_calc_disorder(std::shared_ptr<ResInfo> result) {
     }
     result->disorder = static_cast<float>(disorder_pair_cnt) / \
                        (order_pair_cnt + disorder_pair_cnt + 1);
+
+    result->feature_mgr->add_feature("disorder", result->disorder);
 }
 
 std::size_t TinyEngine::_calc_pair_sign(std::size_t term_sign_1, std::size_t term_sign_2) {

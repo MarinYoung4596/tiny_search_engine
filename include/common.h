@@ -67,6 +67,14 @@ namespace tiny_engine {
 #define NOT !
 #endif
 
+#ifndef RANGE_DEFINATION
+#define RANGE_DEFINATION
+#define GT_LOWER_AND_LT_UPPER(value, lower, upper) (lower < value && value < upper)
+#define GE_LOWER_AND_LT_UPPER(value, lower, upper) (lower <= value && value < upper)
+#define GE_LOWER_AND_LE_UPPER(value, lower, upper) (lower <= value && value <= upper)
+#define GT_LOWER_AND_LE_UPPER(value, lower, upper) (lower < value && value <= upper)
+#endif
+
 #ifndef CHECK_NULL
 #define CHECK_NULL(pointer) (nullptr == (pointer))
 #endif
