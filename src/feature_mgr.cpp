@@ -18,7 +18,6 @@ void FeatureMgr::init() {
     name_value_map.clear();
 }
 
-
 std::string FeatureMgr::to_str() const {
     jsonxx::json j;
     for (auto it = name_value_map.begin(); it != name_value_map.end(); ++it) {

@@ -85,6 +85,7 @@ ResInfo::ResInfo(
     vsm(0.0),
     cqr(0.0),
     ctr(0.0),
+    bm25(0.0),
     edit_distance(0),
     offset_distance(0),
     miss(0.0),
@@ -274,6 +275,7 @@ bool Table::load_index_from_file(std::shared_ptr<Segment> wordseg) {
         }
     }
     ifs.close();
+    calc_avg_doc_len();
     auto time_end = TimeUtil::get_curr_timeval();
     auto delta_time = TimeUtil::timeval_diff_ms(&time_end, &time_begin);
     LOG_INFO("initialize index from %s ok, fwd=%lu inv=%lu cost=%lu ms",
@@ -416,6 +418,20 @@ bool Table::_update_fwd_table() {
         item.second->vec_module = sqrt(module_);
     }
     return true;
+}
+
+void Table::calc_avg_doc_len() {
+    auto doc_num = get_fwd_size();
+    EXPECT_GT_OR_RETURN(doc_num, 0, RETURN_ON_VOID);
+    uint64_t sum_doc_len = 0;
+    for (const auto &item : forward_table) {
+        sum_doc_len += item.second->title_len;
+    }
+    avg_doc_len = static_cast<float>(sum_doc_len) / doc_num;
+}
+
+inline float Table::get_avg_doc_len() const {
+    return avg_doc_len;
 }
 
 bool Table::recall(std::shared_ptr<QueryInfo> query_info,
@@ -614,7 +630,8 @@ bool TinyEngine::search(const std::string &query,
         }
         std::string title = _title_highlight(res);
 #ifndef DEBUG
-        std::cout << StrUtil::format("{}\t{}\n", query, title);
+        std::cout << StrUtil::format("{}\t{}\t{}\n",
+                                    query, title, res->doc_info->url);
 #endif
 
 #ifdef DEBUG
@@ -720,16 +737,16 @@ bool TinyEngine::_rank_results() {
 bool TinyEngine::_calc_features(std::shared_ptr<ResInfo> result) {
     EXPECT_NE_OR_RETURN(nullptr, result, false);
     EXPECT_FALSE_OR_RETURN(nullptr == result || result->hit_term_map.empty(), false);
-    
+
     _calc_vsm(result);
+    _calc_bm25(result);
     _calc_cqr_ctr(result);
     _calc_overlap(result);
     _calc_term_overlap(result);
     _calc_distance(result);
     _calc_disorder(result);
 
-    result->final_score = result->vsm;
-    //result->final_score = result->cqr * result->ctr;
+    result->final_score = result->bm25;
     return true;
 }
 
@@ -789,7 +806,47 @@ bool TinyEngine::_calc_vsm(std::shared_ptr<ResInfo> result) {
     }
     result->vsm = MathUtil::dot_product(req_term_vec, res_term_vec) / \
                   (req_vec_module * res_vec_module);
+
+    result->feature_mgr->add_feature("vsm", result->vsm);
     return true;
+}
+
+bool TinyEngine::_calc_bm25(std::shared_ptr<ResInfo> result) {
+    auto avg_doc_len = table->get_avg_doc_len();
+    float bm25 = 0.0;
+    for (const auto &item : result->hit_term_map) { // <term_sign, freq>
+        auto wi = table->get_term_idf(item.first);
+
+        auto term_freq_in_query = query_info->term_freq_map.count(item.first);
+        auto term_freq_in_doc = result->doc_info->term_freq_map.count(item.first);
+        auto doc_len = result->doc_info->title_len;
+        auto rtd = _calc_bm25_r_factor(term_freq_in_query, term_freq_in_doc,
+                                        doc_len, avg_doc_len);
+#ifdef DEBUG
+        LOG_DEBUG("wi=%f rtd=%f\ttf_in_q=%d tf_in_d=%d\td_len=%d avg_d_len=%f",
+                    wi, rtd,
+                    term_freq_in_query, term_freq_in_doc,
+                    doc_len, avg_doc_len);
+#endif
+        bm25 += wi * rtd;
+    }
+    result->bm25 = bm25;
+    result->feature_mgr->add_feature("bm25", result->bm25);
+}
+
+float TinyEngine::_calc_bm25_r_factor(uint16_t term_freq_in_query,
+                                    uint16_t term_freq_in_doc,
+                                    uint32_t doc_len,
+                                    float avg_doc_len) {
+    float k1 = 2.0f;
+    float k2 = 1.0f;
+    float b = 0.75f;
+
+    float Kd = k1 * (1 - b + b * static_cast<float>(doc_len) / avg_doc_len);
+    auto left = static_cast<float>(term_freq_in_doc) * (k1 + 1) / (term_freq_in_doc + Kd);
+    auto right = static_cast<float>(term_freq_in_query) * (k2 + 1) / (term_freq_in_query + k2);
+    auto Rtd = left * right;
+    return Rtd;
 }
 
 bool TinyEngine::_calc_cqr_ctr(std::shared_ptr<ResInfo> result) {
@@ -836,6 +893,10 @@ bool TinyEngine::_calc_cqr_ctr(std::shared_ptr<ResInfo> result) {
             query_info->query.c_str(), result->doc_info->title.c_str());
     }
     result->miss = 1 - result->cqr;
+
+    result->feature_mgr->add_feature("cqr", result->cqr);
+    result->feature_mgr->add_feature("ctr", result->ctr);
+    result->feature_mgr->add_feature("miss", result->miss);
 #if 0
     if (!GE_LOWER_AND_LE_UPPER(result->cqr, 0.0, 1.0)
             || !GE_LOWER_AND_LE_UPPER(result->ctr, 0.0, 1.0)) {
@@ -870,6 +931,9 @@ void TinyEngine::_calc_term_overlap(std::shared_ptr<ResInfo> result) {
 
     result->longest_common_subseq = MathUtil::longest_common_subsequence(req_terms, res_terms);
     result->longest_continuous_substr = MathUtil::longest_continuous_substring(req_terms, res_terms);
+
+    result->feature_mgr->add_feature("lcseq", result->longest_common_subseq);
+    result->feature_mgr->add_feature("lcstr", result->longest_continuous_substr);
 }
 
 void TinyEngine::_calc_overlap(std::shared_ptr<ResInfo> result) {
@@ -881,6 +945,9 @@ void TinyEngine::_calc_overlap(std::shared_ptr<ResInfo> result) {
     result->str_overlap_len = overlap;
     auto query_len = query_info->query_len;
     result->extra = static_cast<float>(query_len - overlap) / (query_len + 1);
+
+    result->feature_mgr->add_feature("overlap", result->str_overlap_len);
+    result->feature_mgr->add_feature("extra", result->extra);
 }
 
 void TinyEngine::_calc_distance(std::shared_ptr<ResInfo> result) {
@@ -974,7 +1041,7 @@ int TinyEngine::_smallest_distance(
 }
 
 void TinyEngine::_calc_disorder(std::shared_ptr<ResInfo> result) {
-    EXPECT_GT_OR_RETURN(result->hit_term_map.size(), 1, RETURN_ON_VOID); 
+    EXPECT_GT_OR_RETURN(result->hit_term_map.size(), 1, RETURN_ON_VOID);
     std::unordered_set<std::size_t> query_order_pair;
     auto &req_terms = query_info->terms;
     for (decltype(req_terms.size()) i = 0; i < req_terms.size(); ++i) {
@@ -991,11 +1058,11 @@ void TinyEngine::_calc_disorder(std::shared_ptr<ResInfo> result) {
             query_order_pair.insert(pair_sign_ij);
         }
     }
-    /*
-    LOG_DEBUG("hit_term_cnt=%llu, query_order_pair_cnt=%llu", 
-            result->hit_term_map.size(),
-            query_order_pair.size());
-    */
+
+    // LOG_DEBUG("hit_term_cnt=%llu, query_order_pair_cnt=%llu", 
+    //         result->hit_term_map.size(),
+    //         query_order_pair.size());
+
     auto order_pair_cnt = 0;
     auto disorder_pair_cnt = 0;
     auto &res_terms = result->doc_info->terms;

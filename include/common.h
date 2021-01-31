@@ -1,6 +1,6 @@
 /*****************************************************************
 *   Copyright (C) 2018. All rights reserved.
-*   
+*
 *   @file:    common.h
 *   @author:  marinyoung@163.com
 *   @date:    2018/11/22 00:22:59
@@ -13,7 +13,7 @@
 
 namespace tiny_engine {
 
-#define DEBUG
+//#define DEBUG
 
 #ifndef DISALLOW_COPY_AND_ASSIGN
 #define DISALLOW_COPY_AND_ASSIGN(TypeName) \

@@ -104,9 +104,9 @@ public:
     std::string query; // query明文
     uint32_t query_len; // unicode length
     std::vector<TermNode> terms; // query切词
+    std::vector<std::vector<std::string>> syns; // 每个term的同义词改写, 与term切词对齐
 	TermFreqMap term_freq_map; // 每个term的出现频次: <sign, freq>
     float vec_module; // terms tf*idf 向量的模
-    std::vector<std::vector<std::string>> syns; // 每个term的同义词改写, 与term切词对齐
 };
 
 // doc相关feature, 描述query与doc的关联程度
@@ -131,6 +131,7 @@ public:
     float vsm;
     float cqr;
     float ctr;
+    float bm25;
     int str_overlap_len;
     int edit_distance;
     int offset_distance;
@@ -164,6 +165,9 @@ public:
     std::shared_ptr<TermInfo> get_term_info(const std::size_t &term_sign) const;
     float get_term_idf(const std::size_t &term_sign) const;
     std::string get_term_txt(const std::size_t &term_sign) const;
+
+    void calc_avg_doc_len();
+    float get_avg_doc_len() const;
 
     bool hit_stopword(const std::size_t &term_sign) const;
 
@@ -231,15 +235,16 @@ private:
     bool _update_fwd_table();
 
 private:
+    char* forward_file_path;
+    char* invert_file_path;
+    char* index_file_path;
+    float avg_doc_len;
+
+private:
     // doc_sign, doc_info
     std::unordered_map<std::size_t, std::shared_ptr<DocInfo>> forward_table;
     // term_sign, term_info
     std::unordered_map<std::size_t, std::shared_ptr<TermInfo>> invert_table;
-
-    char* forward_file_path;
-    char* invert_file_path;
-    char* index_file_path;
-
     // stopword set
     std::unordered_set<std::size_t> stopword;
 };
@@ -298,10 +303,14 @@ private:
      */
     bool _calc_vsm(std::shared_ptr<ResInfo> result);
     /**
-     *
+     * @brief 计算bm25
      */
     bool _calc_bm25(std::shared_ptr<ResInfo> result);
-    
+
+    float _calc_bm25_r_factor(uint16_t term_freq_in_query,
+                              uint16_t term_freq_in_doc,
+                              uint32_t doc_len,
+                              float avg_doc_len);
     /**
      * @brief 以term为粒度计算最长公共子序列、最长公共子串长度
      */

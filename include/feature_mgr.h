@@ -12,6 +12,7 @@
 #define __FEATURE_MGR_H_
 #pragma once
 
+#include "math_util.h"
 #include <unordered_map>
 #include <string>
 
@@ -35,15 +36,16 @@ private:
     std::unordered_map<std::string, float> name_value_map; // fname : fvalue
 };
 
-
 template <typename Type>
 void FeatureMgr::add_feature(const std::string &str, Type value) {
-    name_value_map[str] = static_cast<float>(value);
+    name_value_map[str] = MathUtil::round(
+                            static_cast<float>(value), 2);
 }
 
 template <typename Type>
 void FeatureMgr::add_feature(const std::string &&str, Type value) {
-    name_value_map[str] = static_cast<float>(value);
+    name_value_map[str] = MathUtil::round(
+                            static_cast<float>(value), 2);
 }
 
 }; // end of namespace tiny_engine
