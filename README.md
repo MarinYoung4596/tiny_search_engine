@@ -12,7 +12,7 @@
 * 一个简单搜索引擎。优化排序算法，通过NDCG评估排序效果。
 * 主要主要关注搜索排序，不涉及其他部分，如爬虫、建库、前端展现等
 * 主要实现检索功能，架构设计较简单，不涉及分布式、多线程等
-* 为简单起见，除`jiebacpp`外，基本不依赖其他第三方库，这么做的目的是聚焦于搜索引擎本身，够用即可，不必被其他复杂的功能束缚住。实际应用中，需要使用成熟的组件，如`boost`, `glog`, `gflags`, `gtest`, `protobuf`, `RapidJson`等
+* 为简单起见，除(`jiebacpp`)[]外，基本不依赖其他第三方库，这么做的目的是聚焦于搜索引擎本身，够用即可，不必被其他复杂的功能束缚住。实际应用中，需要使用成熟的组件，如`boost`, `glog`, `gflags`, `gtest`, `protobuf`, `RapidJson`等
 * 整理了常见的停用词词表, 包括中文、英文、标点符号, 在`dict/stopword.chinese`, `dict/stopword.english`, `dict/stopword.punctuation` 目录下, 其中中文为utf-8编码。
 
 # 开发环境
@@ -28,7 +28,7 @@ make
 ```
 
 ## demo
-![](https://github.com/MarinYoung4596/tiny_search_engine/blob/main/pic/demo.png)
+![demo](https://github.com/MarinYoung4596/tiny_search_engine/blob/main/pic/demo.png)
 
 # 迭代 & 评估
 ## 训练集
@@ -107,7 +107,8 @@ make
   * 需求多样query下，如何确定主次需求？
     * 有的query需求是动态变化的，如“范冰冰”，正常可能百科需求、寻址（微博）需求；当主演的电影（如《我不是潘金莲》）上映时，用户想要的是相关的视频片段，这时是视频需求；当偷税漏税事件爆发后，这时主需求是相关新闻报导。
   * 如何判断一个query是否有时效性需求？
-  * ...
+  * 如何处理周期时效性query?
+    * 如彩票、股票、《乘风破浪的姐姐》、《快乐大本营》等
 
 
 ## 2. doc分析
@@ -149,24 +150,14 @@ make
 
 # References & 扩展阅读
 
-https://en.wikipedia.org/wiki/Tf%E2%80%93idf
-
-https://en.wikipedia.org/wiki/Okapi_BM25
-
-https://en.wikipedia.org/wiki/Vector_space_model
-
-https://en.wikipedia.org/wiki/Language_model
-
-https://segmentfault.com/a/1190000004958644
-
-https://segmentfault.com/a/1190000005270047
-
-https://segmentfault.com/a/1190000005569529
-
-http://www.cnblogs.com/changxiaoxiao/archive/2013/03/27/2984724.html
-
-http://www.infoq.com/cn/articles/yhd-11-11-mlr-ec-search
-
-http://www.infoq.com/cn/articles/a-search-engine-scheduling-architecture-for-reference
-
-http://blog.csdn.net/heiyeshuwu/article/details/43429447
+* https://github.com/yanyiwu/cppjieba
+* https://github.com/nlohmann/json
+* https://github.com/Nomango/jsonxx
+* https://en.wikipedia.org/wiki/Tf%E2%80%93idf
+* https://en.wikipedia.org/wiki/Okapi_BM25
+* https://en.wikipedia.org/wiki/Vector_space_model
+* https://en.wikipedia.org/wiki/Language_model
+* https://segmentfault.com/a/1190000004958644
+* https://segmentfault.com/a/1190000005270047
+* https://segmentfault.com/a/1190000005569529
+* http://www.cnblogs.com/changxiaoxiao/archive/2013/03/27/2984724.html
