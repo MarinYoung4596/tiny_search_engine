@@ -35,8 +35,6 @@ using std::string;
 
 class XGBoostMgr {
 public:
-    using MAX_FILE_PATH_LEN = std::integral_constant<int, 128>;
-
     XGBoostMgr(const string &model = string(),
                 const string &feature = string(),
                 float missing = 0.0);
@@ -45,7 +43,8 @@ public:
     bool init(std::shared_ptr<ConfigUtil> configs);
     bool load_feature_map(const string &fpath);
     bool load_model(const string &fpath);
-    bool predict(const vector<unordered_map<string, float>> &features,
+    bool predict(
+            const vector<unordered_map<string, float>> &features,
             vector<float> &out);
     bool trans_to_dmatrix(
             const vector<unordered_map<string, float>> &features,
