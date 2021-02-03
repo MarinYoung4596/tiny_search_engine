@@ -1,6 +1,6 @@
 /*****************************************************************
 *   Copyright (C) 2018 . All rights reserved.
-*   
+*
 *   @file:    segment.h
 *   @author:  marinyoung@163.com
 *   @date:    2018/12/11 11:30:06
@@ -16,6 +16,7 @@
 #include "str_util.h"
 #include "log_util.h"
 #include "config_util.h"
+#include "node_def.h"
 #include "../third_party/jieba/Jieba.hpp"
 #include <memory>
 
@@ -31,29 +32,6 @@ enum TOKEN_TYPE {
     ALL_MODE = 3,
     SEARCH_MODE = 4,
     MIX_MODE = 5
-};
-
-class TermNode {
-public:
-    TermNode(std::size_t sign,
-            const std::string &txt,
-            uint32_t off = 0,
-            uint32_t len = 0,
-            uint16_t dup = 0,
-            float wei = 0.0);
-    TermNode(const TermNode &other);
-    TermNode& operator=(const TermNode &other);
-    bool operator==(const TermNode &other) const;
-    bool operator<(const TermNode &other) const;
-    std::string to_str() const;
-
-public:
-    std::size_t token_sign; // term签名
-    std::string token;  // term明文
-    uint32_t offset; // offset in unicode
-    uint32_t length; // length in unicode
-    uint16_t dup; // 表示term第几次出现, 从1开始计数
-    float wei; // tf * idf
 };
 
 class Segment {

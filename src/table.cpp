@@ -12,102 +12,6 @@
 
 namespace tiny_engine {
 
-DocInfo::DocInfo(
-        std::size_t sign,
-        const std::string &t,
-        const std::string &u,
-        const std::vector<TermNode> &tms,
-        const TermFreqMap &tf_map,
-        float module_) :
-    doc_sign(sign),
-    title(t),
-    url(u),
-    terms(tms),
-    term_freq_map(tf_map),
-    vec_module(module_) {
-        if (!terms.empty()) {
-            auto p_last_term = std::prev(terms.end());
-            title_len = p_last_term->offset + p_last_term->length;
-        }
-    }
-
-// -----------------------------------------------------------
-
-DocNode::DocNode(std::size_t sign) : doc_sign(sign) {}
-
-bool DocNode::operator==(const DocNode &other) const {
-    return doc_sign == other.doc_sign;
-}
-
-// -----------------------------------------------------------
-
-TermInfo::TermInfo(
-        std::size_t sign,
-        const std::string &t,
-        uint32_t len,
-        uint32_t tf,
-        float idf) : 
-    term_sign(sign),
-    term_txt(t),
-    term_len(len),
-    term_freq(tf),
-    idf(idf) {}
-
-// -----------------------------------------------------------
-
-QueryInfo::QueryInfo(const std::string &q) : query(q) {}
-
-void QueryInfo::init() {
-    query.clear();
-    terms.clear();
-    syns.clear();
-    vec_module = 0.0;
-}
-
-std::string QueryInfo::to_str() const {
-    std::vector<std::string> vec;
-    for (auto it = terms.begin(); it != terms.end(); ++it) {
-        vec.push_back(it->to_str());
-    }
-    return StrUtil::join(vec.begin(), vec.end(), '\t');
-}
-
-// -----------------------------------------------------------
-
-ResInfo::ResInfo(
-        const std::size_t &sign,
-        std::shared_ptr<DocInfo> doc,
-        const TermFreqMap &hit_terms) :
-    doc_sign(sign),
-    doc_info(doc),
-    hit_term_map(hit_terms),
-    term_hits(0),
-    vsm(0.0),
-    cqr(0.0),
-    ctr(0.0),
-    bm25(0.0),
-    miss(0.0),
-    extra(0.0),
-    disorder(0.0),
-    final_score(0.0) {
-    update_res_info();
-    if (nullptr == feature_mgr) {
-        feature_mgr = std::make_shared<FeatureMgr>();
-    }
-}
-
-void ResInfo::update_res_info() {
-    uint16_t sum = 0;
-    term_hits = std::accumulate(
-        hit_term_map.begin(), hit_term_map.end(), sum,
-        [&](uint16_t sum, const std::pair<std::size_t, uint16_t> &item) -> uint16_t {
-            return sum + item.second;
-        }
-    );
-}
-
-// -----------------------------------------------------------
-
 Table::Table() {
     forward_file_path = new char[MAX_FILE_PATH_LEN::value];
     invert_file_path = new char[MAX_FILE_PATH_LEN::value];
@@ -445,7 +349,7 @@ bool Table::recall(std::shared_ptr<QueryInfo> query_info,
         if (term.dup > 1) {
             continue; // 去除重复
         }
-        // TODO 用同义改写term去召回
+        // 用同义改写term去召回
         auto term_info = get_term_info(term.token_sign);
         if (CHECK_NULL(term_info)) {
             continue;
@@ -468,7 +372,7 @@ bool Table::recall(std::shared_ptr<QueryInfo> query_info,
             }
             auto len_begin = doc_list.size(); //
             for (const auto &doc : syn_term_info->docs) {
-                doc_list.insert(doc);
+                doc_list.insert(doc); // TODO: 这里会改变原始倒排拉链的doc_list, 且每次召回时都会改变
             }
             auto len_end = doc_list.size(); //
 #if 0
@@ -1005,7 +909,7 @@ void TinyEngine::_calc_scatter_overlap(std::shared_ptr<ResInfo> result) {
     result->extra = extra;
     result->feature_mgr->add_feature("F_Q_LEN", query_len);
     result->feature_mgr->add_feature("F_U_LEN", title_len);
- 
+
     result->feature_mgr->add_feature("F_QU_STR_LEN_CQR", str_len_cqr);
     result->feature_mgr->add_feature("F_QU_STR_LEN_CTR", str_len_ctr);
     result->feature_mgr->add_feature("F_QU_STR_LEN_COVERAGE", str_len_coverage);

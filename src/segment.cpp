@@ -13,60 +13,6 @@
 
 namespace tiny_engine {
 
-TermNode::TermNode(std::size_t sign,
-        const std::string &txt,
-        uint32_t off,
-        uint32_t len,
-        uint16_t dup,
-        float wei) :
-    token_sign(sign),
-    token(txt),
-    offset(off),
-    length(len),
-    dup(dup),
-    wei(wei) {}
-
-TermNode::TermNode(const TermNode &other) {
-    if (this != &other) {
-        token_sign = other.token_sign;
-        token = other.token;
-        offset = other.offset;
-        length = other.length;
-        dup = other.dup;
-        wei = other.wei;
-    }
-}
-
-TermNode& TermNode::operator=(const TermNode &other) {
-    if (this != &other) {
-        token_sign = other.token_sign;
-        token = other.token;
-        offset = other.offset;
-        length = other.length;
-        dup = other.dup;
-        wei = other.wei;
-    }
-    return *this;
-}
-
-bool TermNode::operator==(const TermNode &other) const {
-    return token_sign == other.token_sign;
-}
-
-bool TermNode::operator<(const TermNode &other) const {
-    return token < other.token;
-}
-
-std::string TermNode::to_str() const {
-#ifdef DEBUG
-    return StrUtil::format(
-        "{},off={},len={},dup={},wei={},sign={}",
-        token.c_str(), offset, length, dup, wei, token_sign);
-#else
-    return token;
-#endif
-}
-
 bool Segment::init(std::shared_ptr<ConfigUtil> configs) {
     EXPECT_NE_OR_RETURN(nullptr, configs, false);
 
