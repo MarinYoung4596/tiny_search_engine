@@ -93,8 +93,8 @@ int main(int argc, char **argv) {
     auto time_3rd = TimeUtil::get_curr_timeval();
     auto init_time = TimeUtil::timeval_diff_ms(&time_2nd, &time_1st);
     auto search_time = TimeUtil::timeval_diff_ms(&time_3rd, &time_2nd);
-    LOG_INFO("init_time[%lu ms] query[%d] search_time[%lu ms] avg_tm[%lu ms] qps[%lu]",
-            init_time, num, search_time, search_time/num, num/(search_time/1000));
+    LOG_INFO("init_time=[%lu] ms query[%d] search_time[%lu ms] avg_tm[%lu ms] qps[%lu]",
+            init_time, num, search_time, search_time / num, num / (search_time / 1000));
 #endif
 
     // stop

@@ -25,27 +25,48 @@ public:
 
     // only suitable for float, int, double, Type
     template <typename Type>
-    void add_feature(const std::string &str, Type value);
+    void add_feature(const std::string &key, Type value);
 
     template <typename Type>
-    void add_feature(const std::string &&str, Type value);
+    void add_feature(const std::string &&key, Type value);
+ 
+    template <typename Type>
+    bool get_feature(const std::string &key, Type &value) const;
+
+    template <typename Type>
+    bool get_feature(const std::string &&key, Type &value) const;
 
     std::string to_str() const;
 
-private:
+public:
     std::unordered_map<std::string, float> name_value_map; // fname : fvalue
 };
 
 template <typename Type>
-void FeatureMgr::add_feature(const std::string &str, Type value) {
-    name_value_map[str] = MathUtil::round(
+void FeatureMgr::add_feature(const std::string &key, Type value) {
+    name_value_map[key] = MathUtil::round(
                             static_cast<float>(value), 2);
 }
 
 template <typename Type>
-void FeatureMgr::add_feature(const std::string &&str, Type value) {
-    name_value_map[str] = MathUtil::round(
+void FeatureMgr::add_feature(const std::string &&key, Type value) {
+    name_value_map[key] = MathUtil::round(
                             static_cast<float>(value), 2);
+}
+
+template <typename Type>
+bool FeatureMgr::get_feature(const std::string &key, Type &value) const {
+    auto iter = name_value_map.find(key);
+    if (iter != name_value_map.end()) {
+        value = iter->second;
+        return true;
+    }
+    return false;
+}
+
+template <typename Type>
+bool FeatureMgr::get_feature(const std::string &&key, Type &value) const {
+    return get_feature(key, value);
 }
 
 }; // end of namespace tiny_engine

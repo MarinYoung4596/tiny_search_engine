@@ -22,6 +22,9 @@
 #include "feature_mgr.h"
 #include "segment.h"
 #include "synonyms.h"
+#ifdef XGBOOST
+#include "xgboost_mgr.h"
+#endif
 
 #include <vector>
 #include <unordered_set>
@@ -125,18 +128,13 @@ public:
     TermFreqMap hit_term_map; // doc与query的term交集: <sign, term在query,doc中的最小频次>
     TermFreqMap hit_syn_map; // query term同义词命中doc的情况: <sign, 同义词term在query中的index>
     std::shared_ptr<FeatureMgr> feature_mgr;
-    uint16_t term_hits; // doc与query的term交集个数(包含重复)
 
     // qu相关性打分的特征
+    uint16_t term_hits; // doc与query的term交集个数(包含重复)
     float vsm;
     float cqr;
     float ctr;
     float bm25;
-    int str_overlap_len;
-    int edit_distance;
-    int offset_distance;
-    int longest_common_subseq;
-    int longest_continuous_substr;
     float miss; // 未命中term权重比例
     float extra; // 未命中term长度占比
     float disorder; // 逆序pair对的比例
@@ -312,13 +310,13 @@ private:
                               uint32_t doc_len,
                               float avg_doc_len);
     /**
-     * @brief 以term为粒度计算最长公共子序列、最长公共子串长度
+     * @brief 有序命中
      */
-    void _calc_term_overlap(std::shared_ptr<ResInfo> result);
+    void _calc_order_overlap(std::shared_ptr<ResInfo> result);
     /**
-     * @brief 字符串overlap的距离
+     * @brief 散乱命中
      */
-    void _calc_overlap(std::shared_ptr<ResInfo> result);
+    void _calc_scatter_overlap(std::shared_ptr<ResInfo> result);
     /**
      * @brief 以term为粒度计算编辑距离、偏移距离
      */
@@ -360,7 +358,9 @@ private:
     std::shared_ptr<Segment> wordseg;
     std::shared_ptr<Synonyms> wordsyn;
     std::unique_ptr<Table> table;
-
+#ifdef XGBOOST
+    std::unique_ptr<XGBoostMgr> xgb_mgr;
+#endif
     std::shared_ptr<QueryInfo> query_info; // 请求query feature特征
     std::vector<std::shared_ptr<ResInfo>> results_info; // 召回的doc list
 };

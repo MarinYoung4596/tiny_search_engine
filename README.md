@@ -2,9 +2,11 @@
 
 # TODO
 - [ ] log_util 完善
-- [ ] xgboost_manager
+- [-] xgboost_manager
+- [ ] title diversity计算
+- [ ] 特征计算部分并行化改造
 - [ ] 多队列召回
-- [ ] 机器学习在搜索中的应用介绍
+- [-] 机器学习在搜索中的应用介绍
 - [ ] 深度学习在搜索中的应用介绍
 
 
@@ -14,6 +16,7 @@
 * 主要实现检索功能，架构设计较简单，不涉及分布式、多线程等
 * 为简单起见，除(`jiebacpp`)[]外，基本不依赖其他第三方库，这么做的目的是聚焦于搜索引擎本身，够用即可，不必被其他复杂的功能束缚住。实际应用中，需要使用成熟的组件，如`boost`, `glog`, `gflags`, `gtest`, `protobuf`, `RapidJson`等
 * 整理了常见的停用词词表, 包括中文、英文、标点符号, 在`dict/stopword.chinese`, `dict/stopword.english`, `dict/stopword.punctuation` 目录下, 其中中文为utf-8编码。
+* 封装了xgboost 模型预测接口，见`xgboost_mgr.h`。
 
 # 开发环境
 * CentOS release 6.3
@@ -46,8 +49,8 @@ make
 | ---- | ----------  | ------------------ |
 | V0.1 | 72.08; 492 | cqr * ctr          |
 | v0.3 | 73.58; 492 | cqr * ctr; stopword |
-| v0.6 | 73.89; 491 | vsm 增加停用词; |
-| v0.7 | 73.99; 494 | term频次交集取最小   |
+| v0.6 | 73.89; 491 | vsm; stopword |
+| v0.7 | 77.94; 494 | cqr*ctr + stopword + 同义词召回 + 不去重 |
 
 
 ## badcase分析
@@ -153,6 +156,7 @@ make
 * https://github.com/yanyiwu/cppjieba
 * https://github.com/nlohmann/json
 * https://github.com/Nomango/jsonxx
+* https://xgboost.readthedocs.io/en/latest/dev/c__api_8h.html
 * https://en.wikipedia.org/wiki/Tf%E2%80%93idf
 * https://en.wikipedia.org/wiki/Okapi_BM25
 * https://en.wikipedia.org/wiki/Vector_space_model

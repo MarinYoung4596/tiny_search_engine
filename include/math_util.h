@@ -122,8 +122,7 @@ public:
      * @param[in] term_freq_in_one_doc : term在某个doc中的频次
      * @return
      */
-    static float calculate_tf(
-            std::size_t term_freq_in_one_doc);
+    static float calculate_tf(std::size_t term_freq_in_one_doc);
     /**
      * @brief 计算idf
      * @param[in] doc_num : 总doc数量（正排数量）
@@ -266,8 +265,8 @@ int MathUtil::edit_distance(
 
 template <typename Type>
 int MathUtil::longest_common_subsequence(
-            const Type &first,
-            const Type &second) {
+        const Type &first,
+        const Type &second) {
     std::vector<std::vector<int>> dp(first.size() + 1,
                                     std::vector<int>(second.size() + 1, 0));
     for (decltype(first.size()) i = 1; i < first.size() + 1; ++i) {
@@ -284,8 +283,8 @@ int MathUtil::longest_common_subsequence(
 
 template <typename Type>
 int MathUtil::longest_continuous_substring(
-            const Type &first,
-            const Type &second) {
+        const Type &first,
+        const Type &second) {
     int result = -1;
     std::vector<std::vector<int>> dp(first.size(), std::vector<int>(second.size(), 0));
     for (decltype(first.size()) i = 0; i < first.size(); ++i) {

@@ -86,8 +86,6 @@ ResInfo::ResInfo(
     cqr(0.0),
     ctr(0.0),
     bm25(0.0),
-    edit_distance(0),
-    offset_distance(0),
     miss(0.0),
     extra(0.0),
     disorder(0.0),
@@ -169,7 +167,7 @@ bool Table::init(std::shared_ptr<ConfigUtil> configs,
 #ifdef DEBUG
         auto time_end = TimeUtil::get_curr_timeval();
         auto delta_time = TimeUtil::timeval_diff_ms(&time_end, &time_begin);
-        LOG_DEBUG("index updated ok, cost %lu ms", delta_time);
+        LOG_DEBUG("index update ok, cost %lu ms", delta_time);
 #endif
     }
 
@@ -473,7 +471,7 @@ bool Table::recall(std::shared_ptr<QueryInfo> query_info,
                 doc_list.insert(doc);
             }
             auto len_end = doc_list.size(); //
-#ifdef DEBUG
+#if 0
             LOG_DEBUG("term[%s] recall[be4=%lu after=%lu]", t.c_str(), len_begin, len_end);
 #endif
         }
@@ -543,7 +541,8 @@ bool Table::_merge(std::shared_ptr<QueryInfo> query_info,
 
 // -----------------------------------------------------------
 
-TinyEngine::TinyEngine(const std::string &config,
+TinyEngine::TinyEngine(
+        const std::string &config,
         std::shared_ptr<Segment> _wordseg) :
     wordseg(_wordseg) {
     configs = std::make_shared<ConfigUtil>(config);
@@ -553,6 +552,9 @@ TinyEngine::TinyEngine(const std::string &config,
     }
     wordsyn = std::make_shared<Synonyms>();
     table.reset(new Table());
+#ifdef XGBOOST
+    xgb_mgr.reset(new XGBoostMgr());
+#endif
 }
 
 bool TinyEngine::init() {
@@ -564,10 +566,15 @@ bool TinyEngine::init() {
     EXPECT_TRUE_OR_RETURN_LOGGED(wordsyn->init(configs), false, "init wordsyn error");
     // init index
     EXPECT_TRUE_OR_RETURN_LOGGED(table->init(configs, wordseg), false, "init index error");
+#ifdef XGBOOST
+    // load xgboost manager
+    EXPECT_TRUE_OR_RETURN_LOGGED(xgb_mgr->init(configs), false, "init xgb mgr error");
+#endif
     // load conf
     EXPECT_TRUE_OR_RETURN_LOGGED(_load_conf(), false, "load conf error");
     // load dict
 
+    LOG_INFO("init search engine finished!");
     return true;
 }
 
@@ -635,18 +642,13 @@ bool TinyEngine::search(const std::string &query,
 #endif
 
 #ifdef DEBUG
-        res->feature_mgr->add_feature("qlen", query_info->query_len);
-        res->feature_mgr->add_feature("qtcnt", query_info->terms.size());
-        res->feature_mgr->add_feature("tlen", res->doc_info->title_len);
-        res->feature_mgr->add_feature("ttcnt", res->doc_info->terms.size());
-
-         std::cout << StrUtil::format(
+        std::cout << StrUtil::format(
                 "{}\t{}\t{}\t{}\n",
                 query,
                 res->doc_info->title,
                 res->doc_info->url,
                 res->feature_mgr->to_str()
-         );
+        );
 #endif
         result.push_back(StrStrPair(res->doc_info->title, res->doc_info->url));
     }
@@ -720,13 +722,27 @@ bool TinyEngine::_fill_query_info(const std::string &query) {
 
 bool TinyEngine::_rank_results() {
     auto i = 0;
+    std::vector<std::unordered_map<std::string, float>> all_doc_features;
     for (auto &res : results_info) {
         if (i >= _max_2nd_sort_num) {
             break;
         }
         _calc_features(res);
+        all_doc_features.push_back(res->feature_mgr->name_value_map);
         ++i;
     }
+#ifdef XGBOOST
+    std::vector<float> predicts;
+    auto ret = xgb_mgr->predict(all_doc_features, predicts);
+    if (ret) {
+        assert(predicts.size() == all_doc_features.size());
+        for (decltype(results_info.size()) i = 0;
+                i < results_info.size() && i < _max_2nd_sort_num; ++i) {
+            auto res = results_info[i];
+            res->final_score = predicts[i];
+        }
+    }
+#endif
     std::sort(results_info.begin(), results_info.end(),
         [&](const std::shared_ptr<ResInfo> &lhs, const std::shared_ptr<ResInfo> &rhs) {
             return lhs->final_score > rhs->final_score;
@@ -741,12 +757,14 @@ bool TinyEngine::_calc_features(std::shared_ptr<ResInfo> result) {
     _calc_vsm(result);
     _calc_bm25(result);
     _calc_cqr_ctr(result);
-    _calc_overlap(result);
-    _calc_term_overlap(result);
+    _calc_scatter_overlap(result);
+    _calc_order_overlap(result);
     _calc_distance(result);
     _calc_disorder(result);
-
-    result->final_score = result->bm25;
+ 
+    result->feature_mgr->add_feature("F_QU_PROXIMITY",
+                pow(0.9, result->miss + result->extra + result->disorder));
+    result->final_score = result->cqr * result->ctr;
     return true;
 }
 
@@ -807,7 +825,7 @@ bool TinyEngine::_calc_vsm(std::shared_ptr<ResInfo> result) {
     result->vsm = MathUtil::dot_product(req_term_vec, res_term_vec) / \
                   (req_vec_module * res_vec_module);
 
-    result->feature_mgr->add_feature("vsm", result->vsm);
+    result->feature_mgr->add_feature("F_QU_VSM", result->vsm);
     return true;
 }
 
@@ -822,8 +840,8 @@ bool TinyEngine::_calc_bm25(std::shared_ptr<ResInfo> result) {
         auto doc_len = result->doc_info->title_len;
         auto rtd = _calc_bm25_r_factor(term_freq_in_query, term_freq_in_doc,
                                         doc_len, avg_doc_len);
-#ifdef DEBUG
-        LOG_DEBUG("wi=%f rtd=%f\ttf_in_q=%d tf_in_d=%d\td_len=%d avg_d_len=%f",
+#if 0
+        LOG_DEBUG("wi=%f rtd=%f tf_in_q=%d tf_in_d=%d d_len=%d avg_d_len=%f",
                     wi, rtd,
                     term_freq_in_query, term_freq_in_doc,
                     doc_len, avg_doc_len);
@@ -831,13 +849,15 @@ bool TinyEngine::_calc_bm25(std::shared_ptr<ResInfo> result) {
         bm25 += wi * rtd;
     }
     result->bm25 = bm25;
-    result->feature_mgr->add_feature("bm25", result->bm25);
+    result->feature_mgr->add_feature("F_QU_BM25", result->bm25);
+    return true;
 }
 
-float TinyEngine::_calc_bm25_r_factor(uint16_t term_freq_in_query,
-                                    uint16_t term_freq_in_doc,
-                                    uint32_t doc_len,
-                                    float avg_doc_len) {
+float TinyEngine::_calc_bm25_r_factor(
+        uint16_t term_freq_in_query,
+        uint16_t term_freq_in_doc,
+        uint32_t doc_len,
+        float avg_doc_len) {
     float k1 = 2.0f;
     float k2 = 1.0f;
     float b = 0.75f;
@@ -894,9 +914,10 @@ bool TinyEngine::_calc_cqr_ctr(std::shared_ptr<ResInfo> result) {
     }
     result->miss = 1 - result->cqr;
 
-    result->feature_mgr->add_feature("cqr", result->cqr);
-    result->feature_mgr->add_feature("ctr", result->ctr);
-    result->feature_mgr->add_feature("miss", result->miss);
+    result->feature_mgr->add_feature("F_QU_TERM_WEI_CQR", result->cqr);
+    result->feature_mgr->add_feature("F_QU_TERM_WEI_CTR", result->ctr);
+    result->feature_mgr->add_feature("F_QU_TERM_WEI_COVERAGE", result->cqr * result->ctr);
+    result->feature_mgr->add_feature("F_QU_MISS", result->miss);
 #if 0
     if (!GE_LOWER_AND_LE_UPPER(result->cqr, 0.0, 1.0)
             || !GE_LOWER_AND_LE_UPPER(result->ctr, 0.0, 1.0)) {
@@ -925,36 +946,91 @@ bool TinyEngine::_calc_cqr_ctr(std::shared_ptr<ResInfo> result) {
     return true;
 }
 
-void TinyEngine::_calc_term_overlap(std::shared_ptr<ResInfo> result) {
+void TinyEngine::_calc_order_overlap(std::shared_ptr<ResInfo> result) {
+    // 所有特征均考虑先后序关系
     auto &req_terms = query_info->terms;
     auto &res_terms = result->doc_info->terms;
+ 
+    // term粒度散乱有序命中
+    auto term_lcseq = MathUtil::longest_common_subsequence(req_terms, res_terms);
+    // term粒度连续命中
+    auto term_lcstr = MathUtil::longest_continuous_substring(req_terms, res_terms);
 
-    result->longest_common_subseq = MathUtil::longest_common_subsequence(req_terms, res_terms);
-    result->longest_continuous_substr = MathUtil::longest_continuous_substring(req_terms, res_terms);
+    auto &query = query_info->query;
+    auto &title = result->doc_info->title;
+    // str粒度散乱有序命中
+    auto str_lcseq = MathUtil::longest_common_subsequence(query, title);
+    // str粒度连续命中
+    auto str_lcstr = MathUtil::longest_continuous_substring(query, title);
 
-    result->feature_mgr->add_feature("lcseq", result->longest_common_subseq);
-    result->feature_mgr->add_feature("lcstr", result->longest_continuous_substr);
+    result->feature_mgr->add_feature("F_QU_TERM_LCSEQ", term_lcseq);
+    result->feature_mgr->add_feature("F_QU_TERM_LCSEQ_OVER_Q",
+                        static_cast<float>(term_lcseq) / req_terms.size());
+    result->feature_mgr->add_feature("F_QU_TERM_LCSEQ_OVER_U",
+                        static_cast<float>(term_lcseq) / res_terms.size());
+
+    result->feature_mgr->add_feature("F_QU_TERM_LCSTR", term_lcstr);
+    result->feature_mgr->add_feature("F_QU_TERM_LCSTR_OVER_Q",
+                        static_cast<float>(term_lcstr) / req_terms.size());
+    result->feature_mgr->add_feature("F_QU_TERM_LCSTR_OVER_U",
+                        static_cast<float>(term_lcstr) / res_terms.size());
+
+    result->feature_mgr->add_feature("F_QU_STR_LCSEQ", str_lcseq);
+    result->feature_mgr->add_feature("F_QU_STR_LCSEQ_OVER_Q",
+                        static_cast<float>(str_lcseq) / query.size());
+    result->feature_mgr->add_feature("F_QU_STR_LCSEQ_OVER_U",
+                        static_cast<float>(str_lcseq) / title.size());
+
+    result->feature_mgr->add_feature("F_QU_STR_LCSTR", str_lcstr);
+    result->feature_mgr->add_feature("F_QU_STR_LCSTR_OVER_Q",
+                        static_cast<float>(str_lcstr) / query.size());
+    result->feature_mgr->add_feature("F_QU_STR_LCSTR_OVER_U",
+                        static_cast<float>(str_lcstr) / title.size());
 }
 
-void TinyEngine::_calc_overlap(std::shared_ptr<ResInfo> result) {
-    int overlap = 0;
+void TinyEngine::_calc_scatter_overlap(std::shared_ptr<ResInfo> result) {
+    uint32_t overlap = 0;
+    // 只算命中,不考虑先后序关系
     for (const auto &item : result->hit_term_map) { // <sign, freq_in_doc>
         auto pterm = table->get_term_info(item.first);
         overlap += pterm->term_len * item.second;
     }
-    result->str_overlap_len = overlap;
     auto query_len = query_info->query_len;
-    result->extra = static_cast<float>(query_len - overlap) / (query_len + 1);
+    auto title_len = result->doc_info->title_len;
+    auto extra = static_cast<float>(query_len - overlap) / (query_len + 1);
+    auto str_len_cqr = static_cast<float>(overlap) / query_len;
+    auto str_len_ctr = static_cast<float>(overlap) / title_len;
+    auto str_len_coverage = str_len_cqr * str_len_ctr;
 
-    result->feature_mgr->add_feature("overlap", result->str_overlap_len);
-    result->feature_mgr->add_feature("extra", result->extra);
+    result->extra = extra;
+    result->feature_mgr->add_feature("F_Q_LEN", query_len);
+    result->feature_mgr->add_feature("F_U_LEN", title_len);
+ 
+    result->feature_mgr->add_feature("F_QU_STR_LEN_CQR", str_len_cqr);
+    result->feature_mgr->add_feature("F_QU_STR_LEN_CTR", str_len_ctr);
+    result->feature_mgr->add_feature("F_QU_STR_LEN_COVERAGE", str_len_coverage);
+    result->feature_mgr->add_feature("F_QU_EXTRA", result->extra);
+
+    auto hit_term_cnt = result->term_hits;
+    auto query_term_cnt = query_info->terms.size();
+    auto title_term_cnt = result->doc_info->terms.size();
+    auto term_cnt_cqr = static_cast<float>(hit_term_cnt) / query_term_cnt;
+    auto term_cnt_ctr = static_cast<float>(hit_term_cnt) / title_term_cnt;
+    auto term_cnt_coverage = term_cnt_cqr * term_cnt_ctr;
+
+    result->feature_mgr->add_feature("F_Q_TERM_CNT", query_term_cnt);
+    result->feature_mgr->add_feature("F_U_TERM_CNT", title_term_cnt);
+    result->feature_mgr->add_feature("F_QU_TERM_CNT_CQR", term_cnt_cqr);
+    result->feature_mgr->add_feature("F_QU_TERM_CNT_CTR", term_cnt_ctr);
+    result->feature_mgr->add_feature("F_QU_TERM_CNT_COVERAGE", term_cnt_coverage);
 }
 
 void TinyEngine::_calc_distance(std::shared_ptr<ResInfo> result) {
     auto &req_terms = query_info->terms;
     auto &res_terms = result->doc_info->terms;
 
-    result->edit_distance = MathUtil::edit_distance(req_terms, res_terms);
+    auto term_edit_distance = MathUtil::edit_distance(req_terms, res_terms);
+    auto str_edit_distance = MathUtil::edit_distance(query_info->query, result->doc_info->title);
 
     auto req_offsets_dist = _offset_distance_helper(req_terms, result->hit_term_map);
     auto res_offsets_dist = _offset_distance_helper(res_terms, result->hit_term_map);
@@ -965,10 +1041,19 @@ void TinyEngine::_calc_distance(std::shared_ptr<ResInfo> result) {
 //             req_offsets_dist,
 //             res_offsets_dist);
 // #endif
-    result->offset_distance = abs(req_offsets_dist - res_offsets_dist);
+    auto offset_distance = abs(req_offsets_dist - res_offsets_dist);
 
-    result->feature_mgr->add_feature("edit_dist", result->edit_distance);
-    result->feature_mgr->add_feature("off_dist", result->offset_distance);
+    result->feature_mgr->add_feature("F_QU_TERM_EDIST", term_edit_distance);
+    result->feature_mgr->add_feature("F_QU_TERM_EDIST_OVER_Q",
+                        static_cast<float>(term_edit_distance) / req_terms.size());
+    result->feature_mgr->add_feature("F_QU_TERM_EDIST_OVER_U",
+                        static_cast<float>(term_edit_distance) / res_terms.size());
+    result->feature_mgr->add_feature("F_QU_STR_EDIST", str_edit_distance);
+    result->feature_mgr->add_feature("F_QU_STR_EDIST_OVER_Q",
+                        static_cast<float>(str_edit_distance) / query_info->query_len);
+    result->feature_mgr->add_feature("F_QU_STR_EDIST_OVER_U",
+                        static_cast<float>(str_edit_distance) / result->doc_info->title_len);
+    result->feature_mgr->add_feature("F_QU_OFF_DIST", offset_distance);
 }
 
 int TinyEngine::_offset_distance_helper(
@@ -1089,7 +1174,7 @@ void TinyEngine::_calc_disorder(std::shared_ptr<ResInfo> result) {
     result->disorder = static_cast<float>(disorder_pair_cnt) / \
                        (order_pair_cnt + disorder_pair_cnt + 1);
 
-    result->feature_mgr->add_feature("disorder", result->disorder);
+    result->feature_mgr->add_feature("F_QU_DISORDER", result->disorder);
 }
 
 std::size_t TinyEngine::_calc_pair_sign(std::size_t term_sign_1, std::size_t term_sign_2) {
