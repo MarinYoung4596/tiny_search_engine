@@ -15,8 +15,8 @@ namespace tiny_engine {
 
 TermNode::TermNode(std::size_t sign,
         const std::string &txt,
-        uint32_t off,
-        uint32_t len,
+        uint16_t off,
+        uint16_t len,
         uint16_t dup,
         float wei) :
     token_sign(sign),
@@ -101,8 +101,8 @@ bool DocNode::operator==(const DocNode &other) const {
 TermInfo::TermInfo(
         std::size_t sign,
         const std::string &t,
-        uint32_t len,
-        uint32_t tf,
+        uint16_t len,
+        uint16_t tf,
         float idf) :
     term_sign(sign),
     term_txt(t),

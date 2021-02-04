@@ -13,8 +13,8 @@
 
 namespace tiny_engine {
 
-//#define DEBUG
-//#define XGBOOST
+#define DEBUG
+#define XGBOOST
 
 #ifndef DISALLOW_COPY_AND_ASSIGN
 #define DISALLOW_COPY_AND_ASSIGN(TypeName) \

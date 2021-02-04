@@ -28,8 +28,8 @@ class TermNode {
 public:
     TermNode(std::size_t sign,
             const std::string &txt,
-            uint32_t off = 0,
-            uint32_t len = 0,
+            uint16_t off = 0,
+            uint16_t len = 0,
             uint16_t dup = 0,
             float wei = 0.0);
     TermNode(const TermNode &other);
@@ -41,8 +41,8 @@ public:
 public:
     std::size_t token_sign; // term签名
     std::string token;  // term明文
-    uint32_t offset; // offset in unicode
-    uint32_t length; // length in unicode
+    uint16_t offset; // offset in unicode
+    uint16_t length; // length in unicode, 即真实的字符长度, 一个汉字长度为1
     uint16_t dup; // 表示term第几次出现, 从1开始计数
     float wei; // tf * idf
 };
@@ -89,14 +89,14 @@ public:
     TermInfo() {}
     TermInfo(std::size_t sign,
             const std::string &t,
-            uint32_t len = 0,
-            uint32_t tf = 0,
+            uint16_t len = 0,
+            uint16_t tf = 0,
             float idf = 0.0);
 public:
     std::size_t term_sign; // term签名
     std::string term_txt; // term明文
-    uint32_t term_len; // term长度
-    uint32_t term_freq; // term在所有doc中出现的总次数
+    uint16_t term_len; // term长度
+    uint16_t term_freq; // term在所有doc中出现的总次数
     float idf;
     std::unordered_set<DocNode, DocNodeHash> docs;
 };
