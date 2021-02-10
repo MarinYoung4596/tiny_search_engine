@@ -9,6 +9,7 @@
 *****************************************************************/
 
 #include "../include/table.h"
+#include <omp.h>
 
 namespace tiny_engine {
 
@@ -546,6 +547,10 @@ bool TinyEngine::search(const std::string &query,
 #endif
 
 #ifdef DEBUG
+        if (res->feature_mgr->name_value_map.empty()) {
+            LOG_WARNING("query=%s title=%s feature is empty!",
+                        query.c_str(), title.c_str());
+        }
         std::cout << StrUtil::format(
                 "{}\t{}\t{}\t{}\n",
                 query,
@@ -625,15 +630,15 @@ bool TinyEngine::_fill_query_info(const std::string &query) {
 }
 
 bool TinyEngine::_rank_results() {
-    auto i = 0;
+    #pragma omp parallel for num_threads(8)
+    for (auto i = 0; i < results_info.size() && i < _max_2nd_sort_num; ++i) {
+        _calc_features(results_info[i]);
+    }
+
     std::vector<std::unordered_map<std::string, float>> all_doc_features;
-    for (auto &res : results_info) {
-        if (i >= _max_2nd_sort_num) {
-            break;
-        }
-        _calc_features(res);
+    for (auto i = 0; i < results_info.size() && i < _max_2nd_sort_num; ++i) {
+        auto res = results_info[i];
         all_doc_features.push_back(res->feature_mgr->name_value_map);
-        ++i;
     }
 #ifdef XGBOOST
     std::vector<float> predicts;
@@ -668,7 +673,7 @@ bool TinyEngine::_calc_features(std::shared_ptr<ResInfo> result) {
  
     result->feature_mgr->add_feature("F_QU_PROXIMITY",
                 pow(0.9, result->miss + result->extra + result->disorder));
-    result->final_score = result->cqr * result->ctr;
+    result->final_score = result->vsm; // result->cqr * result->ctr;
     return true;
 }
 
