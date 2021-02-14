@@ -63,6 +63,9 @@ bool XGBoostMgr::load_feature_map(const string &fpath) {
     std::vector<std::string> arr;
     auto index = 0;
     while (std::getline(ifs, line)) {
+        if (StrUtil::is_start_with(line, "#")) {
+            continue;
+        }
         StrUtil::split(line, '\t', arr);
         if (arr.size() < 2) {
             continue;
