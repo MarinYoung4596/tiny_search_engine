@@ -85,7 +85,7 @@ bool Segment::update_global_info(
     for (auto i = 0; i < tokens.size(); ++i) {
         auto &token = tokens[i];
         auto tf = out.count(token.token_sign);
-        token.dup = tf;
+        token.dup = tf + 1;
 
         if (tf > 0) {
             out[token.token_sign].term_freq += 1;

@@ -85,6 +85,7 @@ public:
     std::vector<TermNode> terms; // title切词
     std::unordered_map<std::size_t, GlobalTermInfo> term_map;
     float vec_module; // 所有切词terms tf*idf 向量的模
+    float wei_sum; // ∑ idf
 };
 
 // 倒排 doc 节点: 倒排的 value
@@ -126,6 +127,7 @@ public:
 class MatchTermInfo {
 public:
     MatchTermInfo();
+    std::string to_str() const;
 
 public:
     GlobalTermInfo in_query;
@@ -154,6 +156,7 @@ public:
     std::vector<std::vector<SynTermNode>> syns; // 每个term的同义词改写, 与term切词对齐
 	std::unordered_map<std::size_t, GlobalTermInfo> term_map; // key=sign
     float vec_module; // terms tf*idf 向量的模
+    float wei_sum; // ∑ idf
 };
 
 // QU相关feature

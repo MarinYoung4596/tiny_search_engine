@@ -95,12 +95,13 @@ DocInfo::DocInfo(
     title(t),
     url(u),
     terms(tms),
-    vec_module(module_) {
-        if (!terms.empty()) {
-            auto p_last_term = std::prev(terms.end());
-            title_len = p_last_term->offset + p_last_term->length;
-        }
+    vec_module(module_),
+    wei_sum(0.0) {
+    if (!terms.empty()) {
+        auto p_last_term = std::prev(terms.end());
+        title_len = p_last_term->offset + p_last_term->length;
     }
+}
 
 // -----------------------------------------------------------
 
@@ -137,6 +138,13 @@ MatchTermInfo::MatchTermInfo():
     idf(0.0),
     is_syn_match(false) {}
 
+std::string MatchTermInfo::to_str() const {
+    return StrUtil::format("{},qf={},df={}",
+            term_txt,
+            in_query.term_freq,
+            in_doc.term_freq
+        );
+}
 // -----------------------------------------------------------
 
 QueryInfo::QueryInfo(const std::string &q) : query(q) {}
@@ -146,6 +154,7 @@ void QueryInfo::init() {
     terms.clear();
     syns.clear();
     vec_module = 0.0;
+    wei_sum = 0.0;
 }
 
 std::string QueryInfo::to_str() const {

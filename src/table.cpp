@@ -309,6 +309,7 @@ bool Table::_update_inv_table() {
 bool Table::_update_fwd_table() {
     for (auto &item : forward_table) {
         auto module_ = 0.0;
+        auto wei_sum = 0.0;
         for (auto &term : item.second->terms) {
             if (hit_stopword(term.token_sign)) {
                 continue;
@@ -317,8 +318,10 @@ bool Table::_update_fwd_table() {
             auto tf = term.dup;
             term.wei = idf; // * tf;
             module_ += pow(term.wei, 2.0);
+            wei_sum += term.wei;
         }
         item.second->vec_module = sqrt(module_);
+        item.second->wei_sum = wei_sum;
     }
     return true;
 }
@@ -577,9 +580,10 @@ bool TinyEngine::search(const std::string &query,
                         query.c_str(), title.c_str());
         }
         std::cout << StrUtil::format(
-                "{}\t{}\t{}\n",
+                "{}\t{}\t{}\t{}\n",
                 query,
                 title,
+                res->doc_info->url,
                 res->feature_mgr->to_str()
         );
 #endif
@@ -613,6 +617,7 @@ bool TinyEngine::_fill_query_info(const std::string &query) {
     }
     // calculate tf * idf
     auto module_ = 0.0;
+    auto wei_sum = 0.0;
     for (auto it = tokens.rbegin(); it != tokens.rend(); ++it) {
         if (table->hit_stopword(it->token_sign)) {
             continue;
@@ -621,12 +626,14 @@ bool TinyEngine::_fill_query_info(const std::string &query) {
         auto tf = it->dup;
         it->wei = idf; // 遍历，无需乘以 tf
         module_ += pow(it->wei, 2.0);
+        wei_sum += it->wei;
     }
     // fill query info
     query_info->init();
     query_info->query = query;
     query_info->terms = std::move(tokens);
     query_info->vec_module = sqrt(module_);
+    query_info->wei_sum = wei_sum;
     if (query_info->terms.size() > 0) {
         auto p_last_term = std::prev(query_info->terms.end());
         query_info->query_len = p_last_term->offset + p_last_term->length; // 真实字符个数
@@ -793,34 +800,9 @@ bool TinyEngine::_calc_cqr_ctr(std::shared_ptr<ResInfo> result) {
         }
         divisor += item.second->hit_freq * item.second->idf;
     }
-    std::unordered_set<std::size_t> term_set;
-    auto &req_terms = query_info->terms;
-    float dividend_cqr = 0.0;
-    for (auto rit = req_terms.crbegin(); rit != req_terms.crend(); ++rit) {
-        if (table->hit_stopword(rit->token_sign)) {
-            continue;
-        }
-        if (term_set.find(rit->token_sign) != term_set.end()) {
-            continue;
-        }
-        dividend_cqr += rit->wei * rit->dup;
-        term_set.insert(rit->token_sign);
-    }
-
-    term_set.clear();
-    auto &res_terms = result->doc_info->terms;
-    float dividend_ctr = 0.0;
-    for (auto rit = res_terms.crbegin(); rit != res_terms.crend(); ++rit) {
-        if (table->hit_stopword(rit->token_sign)) {
-            continue;
-        }
-        if (term_set.find(rit->token_sign) != term_set.end()) {
-            continue;
-        }
-        dividend_ctr += rit->wei * rit->dup;
-        term_set.insert(rit->token_sign);
-    }
-
+ 
+    auto dividend_cqr = query_info->wei_sum;
+    auto dividend_ctr = result->doc_info->wei_sum;
     try {
         result->cqr = divisor / dividend_cqr;
         result->ctr = divisor / dividend_ctr;
@@ -838,7 +820,7 @@ bool TinyEngine::_calc_cqr_ctr(std::shared_ptr<ResInfo> result) {
     if (!GE_LOWER_AND_LE_UPPER(result->cqr, 0.0, 1.0)
             || !GE_LOWER_AND_LE_UPPER(result->ctr, 0.0, 1.0)) {
 
-        LOG_WARNING("query[%s] title[%s] terms[%s] cqr=%.2f/%.2f=%.2f ctr=%.2f/%.2f=%.2f",
+        LOG_WARNING("query[%s] title[%s] terms=%u cqr=%.2f/%.2f=%.2f ctr=%.2f/%.2f=%.2f",
              query_info->query.c_str(),
              result->doc_info->title.c_str(),
              result->term_hits,
