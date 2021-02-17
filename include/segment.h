@@ -42,8 +42,11 @@ public:
 
     bool get_token(const std::string &str,
             std::vector<TermNode> &tokens,
-            std::unordered_map<std::size_t, uint16_t>* tf_map = nullptr,
             TOKEN_TYPE type = MIX_MODE);
+
+    bool update_global_info(
+            std::vector<TermNode> &tokens,
+            std::unordered_map<std::size_t, GlobalTermInfo> &out) const;
 
 private:
     DISALLOW_COPY_AND_ASSIGN(Segment);

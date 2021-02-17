@@ -25,6 +25,18 @@ bool ConfigUtil::get_value(const std::string &key, std::string &value) const {
     return true;
 }
 
+bool ConfigUtil::get_value(const std::string &key, bool &value) const {
+    EXPECT_FALSE_OR_RETURN(key.empty(), false);
+    std::string str_value;
+    EXPECT_TRUE_OR_RETURN(get_value(key, str_value), false);
+    try {
+        value = static_cast<bool>(std::stoi(str_value));
+    } catch (std::exception &e) {
+        return false;
+    }
+    return true;
+}
+
 bool ConfigUtil::get_value(const std::string &key, int &value) const {
     EXPECT_FALSE_OR_RETURN(key.empty(), false);
     std::string str_value;

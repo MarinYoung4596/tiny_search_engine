@@ -68,19 +68,32 @@ std::string TermNode::to_str() const {
 }
 
 // ----------------------------------------------------------------
+SynTermNode::SynTermNode(const std::string &txt, float belief) :
+    token(txt), belief(belief) {
+    token_sign = StrUtil::str_to_sign(token);
+}
+
+// ----------------------------------------------------------------
+GlobalTermInfo::GlobalTermInfo(
+        std::size_t pts,
+        uint16_t tf,
+        uint16_t ti) :
+    pre_term_sign(pts),
+    term_freq(tf),
+    term_idx(ti) {}
+
+// ----------------------------------------------------------------
 
 DocInfo::DocInfo(
         std::size_t sign,
         const std::string &t,
         const std::string &u,
         const std::vector<TermNode> &tms,
-        const TermFreqMap &tf_map,
         float module_) :
     doc_sign(sign),
     title(t),
     url(u),
     terms(tms),
-    term_freq_map(tf_map),
     vec_module(module_) {
         if (!terms.empty()) {
             auto p_last_term = std::prev(terms.end());
@@ -96,9 +109,13 @@ bool DocNode::operator==(const DocNode &other) const {
     return doc_sign == other.doc_sign;
 }
 
+std::size_t DocNode::operator()() const {
+    return doc_sign;
+}
+
 // -----------------------------------------------------------
 
-TermInfo::TermInfo(
+InvTermInfo::InvTermInfo(
         std::size_t sign,
         const std::string &t,
         uint16_t len,
@@ -109,6 +126,15 @@ TermInfo::TermInfo(
     term_len(len),
     term_freq(tf),
     idf(idf) {}
+
+// -----------------------------------------------------------
+
+MatchTermInfo::MatchTermInfo():
+    term_sign(0),
+    term_len(0),
+    hit_freq(0),
+    idf(0.0),
+    is_syn_match(false) {}
 
 // -----------------------------------------------------------
 
@@ -131,13 +157,15 @@ std::string QueryInfo::to_str() const {
 
 // -----------------------------------------------------------
 
+ResInfo::ResInfo() {
+    feature_mgr = std::make_shared<FeatureMgr>();
+}
+
 ResInfo::ResInfo(
         const std::size_t &sign,
-        std::shared_ptr<DocInfo> doc,
-        const TermFreqMap &hit_terms) :
+        std::shared_ptr<DocInfo> doc) :
     doc_sign(sign),
     doc_info(doc),
-    hit_term_map(hit_terms),
     term_hits(0),
     vsm(0.0),
     cqr(0.0),
@@ -147,18 +175,16 @@ ResInfo::ResInfo(
     extra(0.0),
     disorder(0.0),
     final_score(0.0) {
-    update_res_info();
-    if (nullptr == feature_mgr) {
-        feature_mgr = std::make_shared<FeatureMgr>();
-    }
+    feature_mgr = std::make_shared<FeatureMgr>();
 }
 
 void ResInfo::update_res_info() {
     uint16_t sum = 0;
     term_hits = std::accumulate(
-        hit_term_map.begin(), hit_term_map.end(), sum,
-        [&](uint16_t sum, const std::pair<std::size_t, uint16_t> &item) -> uint16_t {
-            return sum + item.second;
+        match_term_map.begin(), match_term_map.end(), sum,
+        [&](uint16_t sum, 
+            const std::pair<std::size_t, std::shared_ptr<MatchTermInfo>> &item) {
+            return sum + item.second->hit_freq;
         }
     );
 }

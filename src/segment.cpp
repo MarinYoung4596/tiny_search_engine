@@ -45,7 +45,7 @@ bool Segment::init(std::shared_ptr<ConfigUtil> configs) {
         stop_words_path = "./dict/stop_words.utf8";
         LOG_WARNING("key[STOP_WORDS] not found, set to [%s]", stop_words_path.c_str());
     }
-    
+
     jieba = std::make_shared<cppjieba::Jieba>(
         jieba_dict_path,
         hmm_model_path,
@@ -53,38 +53,49 @@ bool Segment::init(std::shared_ptr<ConfigUtil> configs) {
         idf_dict_path,
         stop_words_path
     );
-    
+
     return nullptr != jieba;
 }
 
 bool Segment::get_token(const std::string &str,
         std::vector<TermNode> &tokens,
-        std::unordered_map<std::size_t, uint16_t>* tf_map,
         TOKEN_TYPE type) {
     EXPECT_FALSE_OR_RETURN(str.empty(), false);
-    if (!tokens.empty()) {
-        tokens.clear();
-    }
+    EXPECT_TRUE_OR_DO(tokens.empty(), tokens.clear());
     std::vector<cppjieba::Word> seg_results;
     EXPECT_TRUE_OR_RETURN(_get_token(str, seg_results, type), false);
-    std::unordered_map<std::size_t, uint16_t> term_freq_map;
     for (const auto &term : seg_results) {
         auto sign = StrUtil::str_to_sign(StrUtil::to_lower_case(term.word));
-        auto iter = term_freq_map.find(sign);
-        if (iter != term_freq_map.end()) {
-            ++(iter->second);
-        } else {
-            term_freq_map.insert(std::make_pair(sign, 1));
-        }
         TermNode node(sign,
                 term.word,
                 term.unicode_offset,
-                term.unicode_length,
-                term_freq_map[sign]);
+                term.unicode_length);
         tokens.push_back(std::move(node));
     }
-    if (nullptr != tf_map) {
-        *tf_map = term_freq_map;
+    return true;
+}
+
+bool Segment::update_global_info(
+            std::vector<TermNode> &tokens,
+            std::unordered_map<std::size_t, GlobalTermInfo> &out) const {
+    EXPECT_FALSE_OR_RETURN(tokens.empty(), false);
+    EXPECT_TRUE_OR_DO(out.empty(), out.clear());
+
+    std::size_t pre_term_sign = 0;
+    for (auto i = 0; i < tokens.size(); ++i) {
+        auto &token = tokens[i];
+        auto tf = out.count(token.token_sign);
+        token.dup = tf;
+
+        if (tf > 0) {
+            out[token.token_sign].term_freq += 1;
+            out[token.token_sign].offsets.push_back(token.offset);
+        } else {
+            GlobalTermInfo gti(pre_term_sign, 1, i);
+            gti.offsets.push_back(token.offset);
+            out[token.token_sign] = std::move(gti);
+        }
+        pre_term_sign = token.token_sign;
     }
     return true;
 }

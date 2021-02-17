@@ -57,6 +57,10 @@ public:
 	static std::string utf8_to_gbk(const std::string &str);
 
     static std::size_t str_to_sign(const std::string &str);
+    
+    // 中文字符个数
+    static std::size_t get_char_len(const std::string &str);
+    static std::size_t get_char_len(const char* str);
 
     static std::string to_str(std::size_t size, const char* fmt, ...);
 

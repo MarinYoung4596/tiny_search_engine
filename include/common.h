@@ -4,7 +4,7 @@
 *   @file:    common.h
 *   @author:  marinyoung@163.com
 *   @date:    2018/11/22 00:22:59
-*   @brief  
+*   @brief:
 *
 *****************************************************************/
 
@@ -13,8 +13,8 @@
 
 namespace tiny_engine {
 
-#define DEBUG
-#define XGBOOST
+//#define DEBUG
+//#define XGBOOST
 
 #ifndef DISALLOW_COPY_AND_ASSIGN
 #define DISALLOW_COPY_AND_ASSIGN(TypeName) \
@@ -148,6 +148,22 @@ namespace tiny_engine {
 #define EXPECT_FALSE_OR_RETURN(bool_expression, return_value_when_truth) do { \
     if ((bool_expression)) { \
         return return_value_when_truth; \
+    } \
+} while (0)
+#endif
+
+#ifndef EXPECT_TRUE_OR_DO
+#define EXPECT_TRUE_OR_DO(bool_expression, action) do { \
+    if (!(bool_expression)) { \
+        action; \
+    } \
+} while (0)
+#endif
+
+#ifndef EXPECT_FALSE_OR_DO
+#define EXPECT_FALSE_OR_DO(bool_expression, action) do { \
+    if ((bool_expression)) { \
+        action; \
     } \
 } while (0)
 #endif

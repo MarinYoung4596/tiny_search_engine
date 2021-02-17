@@ -55,7 +55,7 @@ public:
     std::size_t get_fwd_size() const;
     std::size_t get_inv_size() const;
     std::shared_ptr<DocInfo> get_doc_info(const std::size_t &doc_sign) const;
-    std::shared_ptr<TermInfo> get_term_info(const std::size_t &term_sign) const;
+    std::shared_ptr<InvTermInfo> get_term_info(const std::size_t &term_sign) const;
     float get_term_idf(const std::size_t &term_sign) const;
     std::string get_term_txt(const std::size_t &term_sign) const;
 
@@ -76,8 +76,31 @@ public:
      * @param[in]:  query: query相关feature
      * @param[out]: result: 正排相关feature
      */
-    bool recall(std::shared_ptr<QueryInfo> query_info,
+    bool recall(
+            std::shared_ptr<QueryInfo> query_info,
             std::vector<std::shared_ptr<ResInfo>> &result) const;
+
+    /**
+     * @brief 填充 match_term_info
+     * @param[in] term_node: 当前 term 在 query 中的命中情况
+     * @param[in] term_info: 当前 term 在 倒排中的信息（e.g. idf 等）
+     * @param[in] query_info: query其他信息
+     * @param[in] doc_info: 当前 term 在 doc 中的信息
+     * @param[out] match_term_info
+     */
+    bool fill_match_term_info(
+            std::shared_ptr<InvTermInfo> term_info,
+            std::shared_ptr<QueryInfo> query_info,
+            std::shared_ptr<DocInfo> doc_info,
+            std::shared_ptr<MatchTermInfo> mti) const;
+
+    bool process_new_doc(
+            std::shared_ptr<QueryInfo> query_info,
+            std::shared_ptr<InvTermInfo> term_info,
+            std::size_t doc_sign,
+            uint16_t term_idx_in_q,
+            bool is_syn_recall,
+            std::unordered_map<std::size_t, std::shared_ptr<ResInfo>> &res_map) const;
 
 private:
     DISALLOW_COPY_AND_ASSIGN(Table);
@@ -132,12 +155,13 @@ private:
     char* invert_file_path;
     char* index_file_path;
     float avg_doc_len;
+    int max_syn_term_recall;
 
 private:
     // doc_sign, doc_info
     std::unordered_map<std::size_t, std::shared_ptr<DocInfo>> forward_table;
     // term_sign, term_info
-    std::unordered_map<std::size_t, std::shared_ptr<TermInfo>> invert_table;
+    std::unordered_map<std::size_t, std::shared_ptr<InvTermInfo>> invert_table;
     // stopword set
     std::unordered_set<std::size_t> stopword;
 };
@@ -216,9 +240,6 @@ private:
      * @brief 以term为粒度计算编辑距离、偏移距离
      */
     void _calc_distance(std::shared_ptr<ResInfo> result);
-    int _offset_distance_helper(
-            const std::vector<TermNode> &terms,
-            const TermFreqMap &target_map);
     /**
      * @brief 计算数组的最短距离
      */
@@ -245,6 +266,7 @@ private:
     int _max_index_recall_num;
     int _max_2nd_sort_num;
     int _max_result_num;
+    bool _is_highlight_syn_term;
 
     const float EPSILON = std::numeric_limits<float>::epsilon();
 

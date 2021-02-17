@@ -13,6 +13,7 @@
 #pragma once
 
 #include "math_util.h"
+#include "log_util.h"
 #include <unordered_map>
 #include <string>
 
@@ -26,10 +27,10 @@ public:
     // only suitable for float, int, double, Type
     template <typename Type>
     void add_feature(const std::string &key, Type value);
-
+    
     template <typename Type>
     void add_feature(const std::string &&key, Type value);
- 
+
     template <typename Type>
     bool get_feature(const std::string &key, Type &value) const;
 

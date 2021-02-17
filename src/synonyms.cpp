@@ -54,20 +54,35 @@ bool Synonyms::_load_data(const string &file) {
     return true;
 }
 
-bool Synonyms::get_syns(const string &term, vector<string> &result) {
+bool Synonyms::get_syns(const string &term, vector<string> &out) const {
     EXPECT_FALSE_OR_RETURN(term.empty(), false);
-    if (!result.empty()) {
-        result.clear();
-    }
+    EXPECT_TRUE_OR_DO(out.empty(), out.clear());
     auto iter1 = term_idx_dict.find(term);
     EXPECT_NE_OR_RETURN(iter1, term_idx_dict.end(), false);
     auto iter2 = idx_terms_dict.find(iter1->second);
     EXPECT_NE_OR_RETURN(iter2, idx_terms_dict.end(), false);
     for (const auto &item : iter2->second) {
-        result.push_back(item);
+        if (term.size() > item.size() && term.find(item) == string::npos) {
+            LOG_DEBUG("ori[%s] syn[%s] filter!", term.c_str(), item.c_str());
+            continue;
+        }
+        out.push_back(item);
     }
     return true;
 }
+
+bool Synonyms::get_syns(const string &term, vector<SynTermNode> &out) const {
+    EXPECT_FALSE_OR_RETURN(term.empty(), false);
+    EXPECT_TRUE_OR_DO(out.empty(), out.clear());
+
+    vector<string> all_syns;
+    EXPECT_TRUE_OR_RETURN(get_syns(term, all_syns), false);
+    for (const auto &term : all_syns) {
+        out.push_back(SynTermNode(term));
+    }
+    return true;
+}
+
 
 };
 

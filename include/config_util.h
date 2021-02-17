@@ -27,6 +27,7 @@ public:
     std::string get_config_file() const;
     std::size_t get_config_size() const;
 
+    bool get_value(const std::string &key, bool &value) const;
     bool get_value(const std::string &key, int32_t &value) const;
     bool get_value(const std::string &key, float &value) const;
     bool get_value(const std::string &key, double &value) const;

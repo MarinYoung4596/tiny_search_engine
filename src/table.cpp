@@ -75,7 +75,7 @@ bool Table::init(std::shared_ptr<ConfigUtil> configs,
         LOG_DEBUG("index update ok, cost %lu ms", delta_time);
 #endif
     }
-
+    configs->get_value("MAX_SYN_TERM_RECALL", max_syn_term_recall);
     return true;
 }
 
@@ -104,7 +104,7 @@ inline std::shared_ptr<DocInfo> Table::get_doc_info(const std::size_t &doc_sign)
     return iter != forward_table.end() ? iter->second : nullptr;
 }
 
-inline std::shared_ptr<TermInfo> Table::get_term_info(const std::size_t &term_sign) const {
+inline std::shared_ptr<InvTermInfo> Table::get_term_info(const std::size_t &term_sign) const {
     auto iter = invert_table.find(term_sign);
     return iter != invert_table.end() ? iter->second : nullptr;
 }
@@ -164,14 +164,14 @@ bool Table::load_index_from_file(std::shared_ptr<Segment> wordseg) {
         auto &title = vec[1];
         auto &url = vec[2];
         std::vector<TermNode> tokens;
-        TermFreqMap term_freq_map;
-        if (!(wordseg->get_token(title, tokens, &term_freq_map))) {
+        if (!(wordseg->get_token(title, tokens))) {
             LOG_WARNING("segment title[%s] failed", title.c_str());
             continue;
         }
         auto doc_sign = StrUtil::str_to_sign(url); /////
         std::shared_ptr<DocInfo> doc_info(
-                new DocInfo(doc_sign, title, url, tokens, term_freq_map));
+                new DocInfo(doc_sign, title, url, tokens));
+        wordseg->update_global_info(tokens, doc_info->term_map);
         if (!add_index(doc_info)) {
             LOG_WARNING("index build error, query[%s] title[%s]",
                     vec[0].c_str(), title.c_str());
@@ -274,11 +274,11 @@ bool Table::_add_to_inv_table(std::shared_ptr<DocInfo> doc_info, bool update_idf
             continue;
         }
         bool need_update = false;
-        std::shared_ptr<TermInfo> term_info = nullptr;
+        std::shared_ptr<InvTermInfo> term_info = nullptr;
         if (invert_table.find(term_sign) != invert_table.end()) {
             term_info = invert_table[term_sign];
         } else {
-            term_info = std::make_shared<TermInfo>(it->token_sign, it->token, it->length);
+            term_info = std::make_shared<InvTermInfo>(it->token_sign, it->token, it->length);
             need_update = true;
         }
         DocNode node(doc_info->doc_sign);
@@ -315,7 +315,7 @@ bool Table::_update_fwd_table() {
             }
             auto idf = get_term_idf(term.token_sign);
             auto tf = term.dup;
-            term.wei = tf * idf;
+            term.wei = idf; // * tf;
             module_ += pow(term.wei, 2.0);
         }
         item.second->vec_module = sqrt(module_);
@@ -339,108 +339,126 @@ inline float Table::get_avg_doc_len() const {
 
 bool Table::recall(std::shared_ptr<QueryInfo> query_info,
         std::vector<std::shared_ptr<ResInfo>> &result) const {
-    if (!result.empty()) {
-        result.clear();
-    }
-    // <term_sign, doc_list>
-    std::vector<TermDocArrPair> doc_array;
-    auto i = -1;
-    for (const auto &term : query_info->terms) {
-        i += 1;
-        if (term.dup > 1) {
-            continue; // 去除重复
+    EXPECT_TRUE_OR_DO(result.empty(), result.clear());
+    std::unordered_map<std::size_t, std::shared_ptr<ResInfo>> res_map;
+    for (auto i = 0; i < query_info->terms.size(); ++i) { // each term
+        auto &term = query_info->terms[i]; // TermNode
+        if (term.dup > 1) { // 重复 term 不必召回
+            continue;
         }
-        // 用同义改写term去召回
-        auto term_info = get_term_info(term.token_sign);
+        auto term_info = get_term_info(term.token_sign); // InvTermInfo
         if (CHECK_NULL(term_info)) {
             continue;
         }
-        /*
-        auto &doc_list = term_info->docs;
-        doc_array.push_back(std::make_pair(term.token_sign, doc_list));
-        */
-        //// TMP
+        // 处理原词召回情况
         auto doc_list = term_info->docs;
-        auto &syn_terms = query_info->syns[i];
-        for (const auto &t : syn_terms) {
-            if (t == term.token) {
-                continue;
+        LOG_DEBUG("term[%s] recall %lu docs", term_info->term_txt.c_str(), doc_list.size());
+        for (auto doc : doc_list) {
+            auto iter = res_map.find(doc.doc_sign);
+            if (iter != res_map.end()) { // 当前 doc 在 res_map 中
+                if (iter->second->match_term_map.count(term.token_sign) > 0) {
+                    continue; // res_map中已存在该 term的信息，不更新
+                }
+                // 不存在，更新 res 里的 match_term_info 信息
+                auto doc_info = iter->second->doc_info;
+                auto mti = std::make_shared<MatchTermInfo>();
+                fill_match_term_info(term_info, query_info, doc_info, mti);
+                iter->second->match_term_map.insert(std::make_pair(term.token_sign, mti));
+            } else { // 否则，插入 res_map
+                process_new_doc(query_info, term_info, doc.doc_sign, false, i, res_map);
             }
-            auto term_sign = StrUtil::str_to_sign(t);
-            auto syn_term_info = get_term_info(term_sign);
+        }
+        //LOG_DEBUG("doc process ok, start process syn recall");
+        // 处理同义词召回情况
+        auto &syn_term_list = query_info->syns[i];
+        for (auto j = 0; j < syn_term_list.size() && j < max_syn_term_recall; ++j) {
+            auto &syn_term = syn_term_list[j];
+            if (syn_term.token_sign == term.token_sign) {
+                continue; // 同义词与原词完全一致
+            }
+            auto syn_term_info = get_term_info(syn_term.token_sign);
             if (CHECK_NULL(syn_term_info)) {
                 continue;
             }
-            auto len_begin = doc_list.size(); //
-            for (const auto &doc : syn_term_info->docs) {
-                doc_list.insert(doc); // TODO: 这里会改变原始倒排拉链的doc_list, 且每次召回时都会改变
+            auto &syn_doc_list = syn_term_info->docs;
+            LOG_DEBUG("syn_term[%s] recall %lu docs", syn_term.token.c_str(), syn_doc_list.size());
+            for (auto doc : syn_doc_list) {
+                auto iter = res_map.find(doc.doc_sign);
+                if (iter != res_map.end()) {
+                    // 原词命中的同时，同义词也命中了，直接忽略
+                    continue;
+                }
+                // 处理未命中的情况
+                process_new_doc(query_info, syn_term_info, doc.doc_sign, true, i, res_map);
             }
-            auto len_end = doc_list.size(); //
-#if 0
-            LOG_DEBUG("term[%s] recall[be4=%lu after=%lu]", t.c_str(), len_begin, len_end);
-#endif
-        }
-        doc_array.push_back(std::make_pair(term.token_sign, doc_list));
-        ////// TMP ended
+        } // end of syn term recall
+    } // end of query term traversal
+    for (auto it = res_map.begin(); it != res_map.end(); ++it) {
+        it->second->update_res_info();
+        result.push_back(it->second);
     }
-    _merge(query_info, doc_array, result);
-
     // 1st_sort: sort by term_hits
     std::sort(result.begin(), result.end(),
             [&](const std::shared_ptr<ResInfo> &lhs, const std::shared_ptr<ResInfo> &rhs) {
         if (lhs->term_hits != rhs->term_hits) {
             return lhs->term_hits > rhs->term_hits;
         }
-        return lhs->doc_info->title.size() < rhs->doc_info->title.size();
+        return lhs->doc_info->title_len < rhs->doc_info->title_len;
     });
     return true;
 }
 
-bool Table::_merge(std::shared_ptr<QueryInfo> query_info,
-        const std::vector<TermDocArrPair> &doc_array,
-        std::vector<std::shared_ptr<ResInfo>> &result) const {
-    EXPECT_FALSE_OR_RETURN(doc_array.empty(), false);
+bool Table::process_new_doc(
+        std::shared_ptr<QueryInfo> query_info,
+        std::shared_ptr<InvTermInfo> term_info,
+        std::size_t doc_sign,
+        uint16_t term_idx_in_q,
+        bool is_syn_recall,
+        std::unordered_map<std::size_t, std::shared_ptr<ResInfo>> &res_map) const {
+    //LOG_DEBUG("process_new_doc start, doc_sign=%lu", doc_sign);
+    auto res_node = std::make_shared<ResInfo>();
+    res_node->doc_sign = doc_sign;
+    res_node->doc_info = get_doc_info(doc_sign);
+    res_node->recall_by_syn = is_syn_recall;
+    auto mti = std::make_shared<MatchTermInfo>();
+    if (is_syn_recall) {
+        mti->is_syn_match = true;
+        mti->in_query.term_idx = term_idx_in_q;
+    }
+    fill_match_term_info(term_info, query_info, res_node->doc_info, mti);
+    // 以doc侧的term_sign为 key
+    res_node->match_term_map.insert(std::make_pair(term_info->term_sign, mti));
+    res_map.insert(std::make_pair(doc_sign, res_node));
+    //LOG_DEBUG("process_new_doc done");
+    return true;
+}
 
-    if (!result.empty()) {
-        result.clear();
+bool Table::fill_match_term_info(
+        std::shared_ptr<InvTermInfo> term_info,
+        std::shared_ptr<QueryInfo> query_info,
+        std::shared_ptr<DocInfo> doc_info,
+        std::shared_ptr<MatchTermInfo> mti) const {
+    //LOG_DEBUG("fill_match_term_info start, term=%s", term_info->term_txt.c_str());
+    // 从倒排中取信息
+    mti->term_sign = term_info->term_sign;
+    mti->term_txt = term_info->term_txt;
+    mti->term_len = term_info->term_len;
+    mti->idf = term_info->idf;
+
+    // 从 query 中取信息
+    if (mti->is_syn_match) {
+        auto ori_term_sign = query_info->terms[mti->in_query.term_idx].token_sign;
+        mti->in_query = query_info->term_map[ori_term_sign]; // 同义词召回继承原词的特征（位置、频次等）
+    } else { // 原词命中
+        mti->in_query = query_info->term_map[mti->term_sign];
     }
-    // query_doc_intersection_terms:
-    //            doc_sign, <term_sign, freq>
-    std::unordered_map<std::size_t, TermFreqMap> docs;
-    // doc_array: term_sign, docs_list
-    for (const auto &item : doc_array) { // row: each term
-        auto &term_sign = item.first;
-        for (const auto &doc_node : item.second) { // column: each doc
-            auto &doc_sign = doc_node.doc_sign;
-            auto doc_iter = docs.find(doc_sign);
-            if (doc_iter == docs.end()) {
-                TermFreqMap intersection_terms;
-                intersection_terms[term_sign] = 1;
-                docs[doc_sign] = intersection_terms;
-            } else {
-                auto &intersection_terms = doc_iter->second;
-                intersection_terms[term_sign] = 1;
-            }
-        }
-    }
-    // update fwd info
-    for (auto &doc : docs) {
-        auto &doc_sign = doc.first;
-        auto doc_info = get_doc_info(doc_sign);
-        if (CHECK_NULL(doc_info)) {
-            LOG_ERROR("doc[%lu] not found in forward_table!", doc_sign);
-            continue;
-        }
-        // update: <Query与Doc的term交集, term在query\doc中出现的最小频次>
-        for (auto &term : doc.second) {
-            auto &term_sign = term.first;
-            auto &term_freq_in_query = query_info->term_freq_map[term_sign];
-            auto &term_freq_in_doc = doc_info->term_freq_map[term_sign];
-            term.second = std::min(term_freq_in_query, term_freq_in_doc);
-        }
-        auto res_node = std::make_shared<ResInfo>(doc_sign, doc_info, doc.second);
-        result.push_back(res_node);
-    }
+
+    // 从 doc 中取信息
+    mti->in_doc = doc_info->term_map[mti->term_sign];
+
+    // 其他信息
+    mti->hit_freq = std::min(mti->in_query.term_freq, mti->in_doc.term_freq);
+    //LOG_DEBUG("fill_match_term_info done");
     return true;
 }
 
@@ -502,6 +520,9 @@ bool TinyEngine::_load_conf() {
         _max_result_num = MAX_RESULT_NUM::value;
         LOG_WARNING("key[MAX_RESULT_NUM] not found, set to [%d]", _max_result_num);
     }
+    int syn_highlight_flag;
+    configs->get_value("HIGHLIGHT_SYN_MATCH_TERM", syn_highlight_flag);
+    _is_highlight_syn_term = static_cast<bool>(syn_highlight_flag);
     return true;
 }
 
@@ -582,41 +603,41 @@ bool TinyEngine::_fill_query_info(const std::string &query) {
     EXPECT_NE_OR_RETURN(nullptr, table, false);
 
     std::vector<TermNode> tokens;
-    TermFreqMap term_freq_map;
     // word segment
-    if (!(wordseg->get_token(query, tokens, &term_freq_map))) {
+    if (!(wordseg->get_token(query, tokens))) {
         LOG_WARNING("query[%s] segment error", query.c_str());
         return false;
     }
     // calculate tf * idf
-    auto module = 0.0;
-    for (auto it = tokens.begin(); it != tokens.end(); ++it) {
+    auto module_ = 0.0;
+    for (auto it = tokens.rbegin(); it != tokens.rend(); ++it) {
         if (table->hit_stopword(it->token_sign)) {
             continue;
         }
         auto idf = table->get_term_idf(it->token_sign);
         auto tf = it->dup;
-        it->wei = idf * sqrt(tf) / sqrt(tokens.size());
-        module += pow(it->wei, 2.0);
+        it->wei = idf; // 遍历，无需乘以 tf
+        module_ += pow(it->wei, 2.0);
     }
+    // fill query info
     query_info->init();
     query_info->query = query;
     query_info->terms = std::move(tokens);
-    query_info->term_freq_map = std::move(term_freq_map);
-    query_info->vec_module = sqrt(module);
+    query_info->vec_module = sqrt(module_);
     if (query_info->terms.size() > 0) {
         auto p_last_term = std::prev(query_info->terms.end());
-        query_info->query_len = p_last_term->offset + p_last_term->length;
+        query_info->query_len = p_last_term->offset + p_last_term->length; // 真实字符个数
+        wordseg->update_global_info(query_info->terms, query_info->term_map);
     }
-    ////// TMP
-    std::vector<std::string> syns;
+    // get term syn info
+    std::vector<SynTermNode> syns;
     for (const auto &term : query_info->terms) {
         wordsyn->get_syns(term.token, syns);
         query_info->syns.push_back(syns);
         syns.clear();
     }
-    ///// TMP end
-
+    
+    assert(query_info->terms.size() == query_info->syns.size());
 #ifdef DEBUG
     std::vector<std::string> vec;
     for_each(query_info->terms.begin(), query_info->terms.end(),
@@ -661,7 +682,7 @@ bool TinyEngine::_rank_results() {
 
 bool TinyEngine::_calc_features(std::shared_ptr<ResInfo> result) {
     EXPECT_NE_OR_RETURN(nullptr, result, false);
-    EXPECT_FALSE_OR_RETURN(nullptr == result || result->hit_term_map.empty(), false);
+    EXPECT_FALSE_OR_RETURN(nullptr == result || result->match_term_map.empty(), false);
 
     _calc_vsm(result);
     _calc_bm25(result);
@@ -673,24 +694,7 @@ bool TinyEngine::_calc_features(std::shared_ptr<ResInfo> result) {
  
     result->feature_mgr->add_feature("F_QU_PROXIMITY",
                 pow(0.9, result->miss + result->extra + result->disorder));
-    result->final_score = result->vsm; // result->cqr * result->ctr;
-    return true;
-}
-
-bool TinyEngine::_get_intersections(
-        std::shared_ptr<ResInfo> result,
-        std::vector<TermNode> &target) {
-    EXPECT_NE_OR_RETURN(nullptr, result, false);
-    if (!target.empty()) {
-        target.clear();
-    }
-    for (const auto &item : result->hit_term_map) {
-        auto pterm = table->get_term_info(item.first);
-        // offset: 这里用不上, 设为0
-        TermNode node(item.first, pterm->term_txt, 0, pterm->term_len,
-                      item.second, pterm->idf * item.second);
-        target.push_back(std::move(node));
-    }
+    result->final_score = result->vsm; //result->cqr * result->ctr;
     return true;
 }
 
@@ -723,7 +727,6 @@ bool TinyEngine::_calc_vsm(std::shared_ptr<ResInfo> result) {
                                                std::make_pair(0.0, term.wei)));
         }
     }
-    // TODO: 同义词命中补充
 
     std::vector<float> req_term_vec;
     std::vector<float> res_term_vec;
@@ -733,7 +736,7 @@ bool TinyEngine::_calc_vsm(std::shared_ptr<ResInfo> result) {
     }
     result->vsm = MathUtil::dot_product(req_term_vec, res_term_vec) / \
                   (req_vec_module * res_vec_module);
-
+    
     result->feature_mgr->add_feature("F_QU_VSM", result->vsm);
     return true;
 }
@@ -741,14 +744,14 @@ bool TinyEngine::_calc_vsm(std::shared_ptr<ResInfo> result) {
 bool TinyEngine::_calc_bm25(std::shared_ptr<ResInfo> result) {
     auto avg_doc_len = table->get_avg_doc_len();
     float bm25 = 0.0;
-    for (const auto &item : result->hit_term_map) { // <term_sign, freq>
+    for (const auto &item : result->match_term_map) { // <term_sign, MatchTermInfo>
         auto wi = table->get_term_idf(item.first);
 
-        auto term_freq_in_query = query_info->term_freq_map.count(item.first);
-        auto term_freq_in_doc = result->doc_info->term_freq_map.count(item.first);
+        auto term_freq_in_query = item.second->in_query.term_freq;
+        auto term_freq_in_doc = item.second->in_doc.term_freq;
         auto doc_len = result->doc_info->title_len;
         auto rtd = _calc_bm25_r_factor(term_freq_in_query, term_freq_in_doc,
-                                        doc_len, avg_doc_len);
+                                       doc_len, avg_doc_len);
 #if 0
         LOG_DEBUG("wi=%f rtd=%f tf_in_q=%d tf_in_d=%d d_len=%d avg_d_len=%f",
                     wi, rtd,
@@ -780,11 +783,11 @@ float TinyEngine::_calc_bm25_r_factor(
 
 bool TinyEngine::_calc_cqr_ctr(std::shared_ptr<ResInfo> result) {
     float divisor = 0.0;
-    for (const auto &item : result->hit_term_map) {
+    for (const auto &item : result->match_term_map) {
         if (table->hit_stopword(item.first)) {
             continue;
         }
-        divisor += item.second * table->get_term_idf(item.first);
+        divisor += item.second->hit_freq * item.second->idf;
     }
     std::unordered_set<std::size_t> term_set;
     auto &req_terms = query_info->terms;
@@ -796,7 +799,7 @@ bool TinyEngine::_calc_cqr_ctr(std::shared_ptr<ResInfo> result) {
         if (term_set.find(rit->token_sign) != term_set.end()) {
             continue;
         }
-        dividend_cqr += rit->wei;
+        dividend_cqr += rit->wei * rit->dup;
         term_set.insert(rit->token_sign);
     }
 
@@ -810,7 +813,7 @@ bool TinyEngine::_calc_cqr_ctr(std::shared_ptr<ResInfo> result) {
         if (term_set.find(rit->token_sign) != term_set.end()) {
             continue;
         }
-        dividend_ctr += rit->wei;
+        dividend_ctr += rit->wei * rit->dup;
         term_set.insert(rit->token_sign);
     }
 
@@ -831,19 +834,9 @@ bool TinyEngine::_calc_cqr_ctr(std::shared_ptr<ResInfo> result) {
     if (!GE_LOWER_AND_LE_UPPER(result->cqr, 0.0, 1.0)
             || !GE_LOWER_AND_LE_UPPER(result->ctr, 0.0, 1.0)) {
 
-        std::vector<TermNode> intersections;
-        _get_intersections(result, intersections);
-
-        std::vector<std::string> vec;
-        for_each(intersections.begin(), intersections.end(),
-                [&vec](const TermNode &node) {
-                    vec.push_back(node.to_str());
-                });
-        std::string term_str = StrUtil::join(vec.begin(), vec.end(), " | ");
         LOG_WARNING("query[%s] title[%s] terms[%s] cqr=%.2f/%.2f=%.2f ctr=%.2f/%.2f=%.2f",
              query_info->query.c_str(),
              result->doc_info->title.c_str(),
-             term_str.c_str(),
              divisor,
              dividend_cqr,
              result->cqr,
@@ -900,9 +893,9 @@ void TinyEngine::_calc_order_overlap(std::shared_ptr<ResInfo> result) {
 void TinyEngine::_calc_scatter_overlap(std::shared_ptr<ResInfo> result) {
     uint32_t overlap = 0;
     // 只算命中,不考虑先后序关系
-    for (const auto &item : result->hit_term_map) { // <sign, freq_in_doc>
+    for (const auto &item : result->match_term_map) { // <sign, freq_in_doc>
         auto pterm = table->get_term_info(item.first);
-        overlap += pterm->term_len * item.second;
+        overlap += pterm->term_len * item.second->hit_freq;
     }
     auto query_len = query_info->query_len;
     auto title_len = result->doc_info->title_len;
@@ -912,13 +905,14 @@ void TinyEngine::_calc_scatter_overlap(std::shared_ptr<ResInfo> result) {
     auto str_len_coverage = str_len_cqr * str_len_ctr;
 
     result->extra = extra;
+    result->feature_mgr->add_feature("F_QU_EXTRA", result->extra);
+
     result->feature_mgr->add_feature("F_Q_LEN", query_len);
     result->feature_mgr->add_feature("F_U_LEN", title_len);
 
     result->feature_mgr->add_feature("F_QU_STR_LEN_CQR", str_len_cqr);
     result->feature_mgr->add_feature("F_QU_STR_LEN_CTR", str_len_ctr);
     result->feature_mgr->add_feature("F_QU_STR_LEN_COVERAGE", str_len_coverage);
-    result->feature_mgr->add_feature("F_QU_EXTRA", result->extra);
 
     auto hit_term_cnt = result->term_hits;
     auto query_term_cnt = query_info->terms.size();
@@ -929,6 +923,7 @@ void TinyEngine::_calc_scatter_overlap(std::shared_ptr<ResInfo> result) {
 
     result->feature_mgr->add_feature("F_Q_TERM_CNT", query_term_cnt);
     result->feature_mgr->add_feature("F_U_TERM_CNT", title_term_cnt);
+    result->feature_mgr->add_feature("F_QU_HIT_TERM_CNT", hit_term_cnt);
     result->feature_mgr->add_feature("F_QU_TERM_CNT_CQR", term_cnt_cqr);
     result->feature_mgr->add_feature("F_QU_TERM_CNT_CTR", term_cnt_ctr);
     result->feature_mgr->add_feature("F_QU_TERM_CNT_COVERAGE", term_cnt_coverage);
@@ -941,17 +936,6 @@ void TinyEngine::_calc_distance(std::shared_ptr<ResInfo> result) {
     auto term_edit_distance = MathUtil::edit_distance(req_terms, res_terms);
     auto str_edit_distance = MathUtil::edit_distance(query_info->query, result->doc_info->title);
 
-    auto req_offsets_dist = _offset_distance_helper(req_terms, result->hit_term_map);
-    auto res_offsets_dist = _offset_distance_helper(res_terms, result->hit_term_map);
-// #ifdef DEBUG
-//     LOG_DEBUG("query[%s] title[%s] req[%d] res[%d]",
-//             query_info->query.c_str(),
-//             result->doc_info->title.c_str(),
-//             req_offsets_dist,
-//             res_offsets_dist);
-// #endif
-    auto offset_distance = abs(req_offsets_dist - res_offsets_dist);
-
     result->feature_mgr->add_feature("F_QU_TERM_EDIST", term_edit_distance);
     result->feature_mgr->add_feature("F_QU_TERM_EDIST_OVER_Q",
                         static_cast<float>(term_edit_distance) / req_terms.size());
@@ -962,90 +946,21 @@ void TinyEngine::_calc_distance(std::shared_ptr<ResInfo> result) {
                         static_cast<float>(str_edit_distance) / query_info->query_len);
     result->feature_mgr->add_feature("F_QU_STR_EDIST_OVER_U",
                         static_cast<float>(str_edit_distance) / result->doc_info->title_len);
-    result->feature_mgr->add_feature("F_QU_OFF_DIST", offset_distance);
-}
-
-int TinyEngine::_offset_distance_helper(
-        const std::vector<TermNode> &terms,
-        const TermFreqMap &target_map) {
-    // <sign, [offset list]>
-    std::unordered_map<std::size_t, std::vector<uint32_t>> term_offsets;
-    for (const auto &term : terms) {
-        // 从前往后，保证有序
-        auto iter = term_offsets.find(term.token_sign);
-        if (iter != term_offsets.end()) {
-            iter->second.push_back(term.offset);
-        } else {
-            term_offsets[term.token_sign] = std::vector<uint32_t>({term.offset});
-        }
-    }
-    // FIXME: 同一个term, query与doc中命中的次数不一样，会重复计算，导致offset_diff不准
-    // 1) 会跟自身算偏移距离 2) <A,B> <B,A>重复计算
-    auto offset_diff = 0;
-    std::unordered_set<std::size_t> term_pair_set;
-    std::unordered_set<std::size_t> cur_term_set;
-    for (decltype(terms.size()) i = 0; i < terms.size(); ++i) {
-        auto &cur_term_sign = terms[i].token_sign;
-        if (!target_map.count(cur_term_sign)) {
-            continue;
-        }
-        if (cur_term_set.count(cur_term_sign) > 0) {
-            continue;
-        }
-        std::unordered_set<std::size_t> next_term_set;
-        for (auto j = i + 1; j < terms.size(); ++j) {
-            auto &next_term_sign = terms[j].token_sign;
-            if (!target_map.count(next_term_sign)) {
-                continue;
-            }
-            if (next_term_set.count(next_term_sign) > 0) {
-                continue;
-            }
-            auto term_pair_sign = cur_term_sign & next_term_sign;
-            if (term_pair_set.count(term_pair_sign) > 0) {
-                continue;
-            }
-            offset_diff += _smallest_distance(
-                                term_offsets[cur_term_sign],
-                                term_offsets[next_term_sign]);
-            next_term_set.insert(next_term_sign);
-            term_pair_set.insert(term_pair_sign);
-        }
-        cur_term_set.insert(cur_term_sign);
-    }
-    return offset_diff;
-}
-
-int TinyEngine::_smallest_distance(
-        const std::vector<uint32_t> &left,
-        const std::vector<uint32_t> &right) {
-    auto minimum = std::numeric_limits<uint32_t>::max();
-    decltype(left.size()) i = 0;
-    decltype(right.size()) j = 0;
-    while (i < left.size() && j < right.size()) {
-        if (left[i] >= right[j]) {
-            minimum = std::min(minimum, left[i] - right[j]);
-            ++j;
-        } else {
-            minimum = std::min(minimum, right[j] - left[i]);
-            ++i;
-        }
-    }
-    return minimum;
 }
 
 void TinyEngine::_calc_disorder(std::shared_ptr<ResInfo> result) {
-    EXPECT_GT_OR_RETURN(result->hit_term_map.size(), 1, RETURN_ON_VOID);
+    EXPECT_GT_OR_RETURN(result->match_term_map.size(), 1, RETURN_ON_VOID);
     std::unordered_set<std::size_t> query_order_pair;
     auto &req_terms = query_info->terms;
-    for (decltype(req_terms.size()) i = 0; i < req_terms.size(); ++i) {
+    for (decltype(req_terms.size()) i = 1; i < req_terms.size(); ++i) {
         auto term_sign_i = req_terms[i].token_sign;
-        if (result->hit_term_map.count(term_sign_i) < 1) {
+
+        if (result->match_term_map.count(term_sign_i) < 1) {
             continue;
         }
         for (decltype(req_terms.size()) j = i + 1; j < req_terms.size(); ++j) {
             auto term_sign_j = req_terms[j].token_sign;
-            if (result->hit_term_map.count(term_sign_j) < 1) {
+            if (result->match_term_map.count(term_sign_j) < 1) {
                 continue;
             }
             auto pair_sign_ij = _calc_pair_sign(term_sign_i, term_sign_j);
@@ -1054,7 +969,7 @@ void TinyEngine::_calc_disorder(std::shared_ptr<ResInfo> result) {
     }
 
     // LOG_DEBUG("hit_term_cnt=%llu, query_order_pair_cnt=%llu", 
-    //         result->hit_term_map.size(),
+    //         result->match_term_map.size(),
     //         query_order_pair.size());
 
     auto order_pair_cnt = 0;
@@ -1062,12 +977,12 @@ void TinyEngine::_calc_disorder(std::shared_ptr<ResInfo> result) {
     auto &res_terms = result->doc_info->terms;
     for (decltype(res_terms.size()) i = 0; i < res_terms.size(); ++i) {
         auto term_sign_i = res_terms[i].token_sign;
-        if (result->hit_term_map.count(term_sign_i) < 1) {
+        if (result->match_term_map.count(term_sign_i) < 1) {
             continue;
         }
         for (decltype(res_terms.size()) j = i + 1; j < res_terms.size(); ++j) {
             auto term_sign_j = res_terms[j].token_sign;
-            if (result->hit_term_map.count(term_sign_j) < 1) {
+            if (result->match_term_map.count(term_sign_j) < 1) {
                 continue;
             }
             auto pair_sign_ij = _calc_pair_sign(term_sign_i, term_sign_j);
@@ -1104,9 +1019,14 @@ std::string TinyEngine::_title_highlight(std::shared_ptr<ResInfo> result) {
     std::string title;
     auto doc = result->doc_info;
     for (const auto &term : doc->terms) {
-        if (result->hit_term_map.count(term.token_sign) > 0) {
-            title += StrUtil::format("{}{}{}",
-                COLOR_RED, term.token.c_str(), COLOR_NONE);
+        if (result->match_term_map.count(term.token_sign) > 0) {
+            if (result->match_term_map[term.token_sign]->is_syn_match
+                    && !_is_highlight_syn_term) {
+                title += term.token;
+            } else {
+                title += StrUtil::format("{}{}{}",
+                    COLOR_RED, term.token.c_str(), COLOR_NONE);
+            }
         } else {
             title += term.token;
         }

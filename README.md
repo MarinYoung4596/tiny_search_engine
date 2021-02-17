@@ -2,12 +2,18 @@
 
 # TODO
 - [ ] log_util 完善
-- [-] xgboost_manager
 - [ ] title diversity计算
-- [ ] 特征计算部分并行化改造
+- [ ] # 特征计算部分并行化改造 #
 - [ ] 多队列召回
-- [-] 机器学习在搜索中的应用介绍
-- [ ] 深度学习在搜索中的应用介绍
+- [x] 机器学习在搜索中的应用
+- [ ] 深度学习在搜索中的应用
+- [ ] 所有term、doc、query 及table计算逻辑适配unicode、utf8长度
+- [x] 移除 segment 里计算 TermFreqMap 的逻辑, 改为切词完成之后计算
+- [x] MatchTermInfo适配，重写召回、部分特征计算逻辑
+- [ ] 计算title_diversity特征
+- [ ] 计算prefix_match特征
+- [ ] 重训相关性模型
+- [ ] ndcg 计算脚本
 
 
 # What's this?

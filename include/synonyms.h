@@ -15,6 +15,7 @@
 #include "config_util.h"
 #include "log_util.h"
 #include "str_util.h"
+#include "node_def.h"
 #include <unordered_map>
 #include <string>
 
@@ -27,7 +28,8 @@ class Synonyms {
 public:
     Synonyms() {}
     bool init(std::shared_ptr<ConfigUtil> configs);
-    bool get_syns(const string &term, vector<string> &result);
+    bool get_syns(const string &term, vector<string> &out) const;
+    bool get_syns(const string &term, vector<SynTermNode> &out) const;
     float similarity(const string &first, const string &second);
 
 private:

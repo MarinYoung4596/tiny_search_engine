@@ -118,6 +118,22 @@ std::size_t StrUtil::str_to_sign(const std::string &str) {
     return h(str);
 }
 
+std::size_t StrUtil::get_char_len(const std::string &str) {
+    return get_char_len(str.c_str());
+}
+
+std::size_t StrUtil::get_char_len(const char* str) {
+    std::size_t len = 0;
+    std::size_t i = 0;
+    while (str[i]) {
+        if ((str[i] & 0xc0) != 0x80) {
+            ++len;
+        }
+        ++i;
+    }
+    return len;
+}
+
 std::string StrUtil::to_lower_case(const std::string &str) {
 	std::string result(str.size(), '\0');
 	std::transform(str.begin(), str.end(), result.begin(), ::tolower);
