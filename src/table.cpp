@@ -669,7 +669,7 @@ bool TinyEngine::_rank_results() {
     std::vector<std::unordered_map<std::string, float>> all_doc_features;
     for (auto i = 0; i < results_info.size() && i < _max_2nd_sort_num; ++i) {
         auto res = results_info[i];
-        all_doc_features.push_back(res->feature_mgr->name_value_map);
+        all_doc_features.push_back(res->feature_mgr->get_features());
     }
     std::vector<float> predicts;
     auto ret = xgb_mgr->predict(all_doc_features, predicts);

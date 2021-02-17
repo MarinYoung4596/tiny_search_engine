@@ -39,6 +39,7 @@ public:
 
     std::string to_str() const;
     bool is_empty() const;
+    std::unordered_map<std::string, float> get_features() const;
 
 public:
     std::unordered_map<std::string, float> name_value_map; // fname : fvalue

@@ -76,8 +76,18 @@ bool XGBoostMgr::load_feature_map(const string &fpath) {
         feature_map[fname] = fid;
         index += 1;
     }
-    LOG_INFO("load %lu items from %s", feature_map.size(), fpath.c_str());
+    LOG_INFO("load %lu items from %s, feature_map[%s]",
+            feature_map.size(), fpath.c_str(),
+            to_str().c_str());
     return true;
+}
+
+string XGBoostMgr::to_str() const {
+    vector<string> items;
+    for (const auto &item : feature_map) {
+        items.push_back(StrUtil::format("{}:{}", item.first, item.second));
+    }
+    return StrUtil::join(items.begin(), items.end(), ',');
 }
 
 bool XGBoostMgr::load_model(const string &fpath) {

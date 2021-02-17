@@ -30,6 +30,10 @@ bool FeatureMgr::is_empty() const {
     return name_value_map.empty();
 }
 
+std::unordered_map<std::string, float> FeatureMgr::get_features() const {
+    return name_value_map;
+}
+
 }; // end of namespace tiny_engine
 
 /* vim: set expandtab ts=4 sw=4 sts=4 tw=100: */

@@ -52,6 +52,7 @@ public:
     void trans_to_svm_data(
             const unordered_map<string, float> &features,
             unordered_map<int, float> &out) const;
+    std::string to_str() const;
 
 private:
     unordered_map<string, int> feature_map;
