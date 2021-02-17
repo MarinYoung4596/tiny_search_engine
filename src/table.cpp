@@ -568,7 +568,7 @@ bool TinyEngine::search(const std::string &query,
         std::string title = _title_highlight(res);
 #ifndef DEBUG
         std::cout << StrUtil::format("{}\t{}\t{}\n",
-                                    query, title, res->doc_info->url);
+                                    query, res->doc_info->title, res->doc_info->url);
 #endif
 
 #ifdef DEBUG
@@ -577,10 +577,9 @@ bool TinyEngine::search(const std::string &query,
                         query.c_str(), title.c_str());
         }
         std::cout << StrUtil::format(
-                "{}\t{}\t{}\t{}\n",
+                "{}\t{}\t{}\n",
                 query,
-                res->doc_info->title,
-                res->doc_info->url,
+                title,
                 res->feature_mgr->to_str()
         );
 #endif
@@ -958,7 +957,7 @@ void TinyEngine::_calc_disorder(std::shared_ptr<ResInfo> result) {
     EXPECT_GT_OR_RETURN(result->match_term_map.size(), 1, RETURN_ON_VOID);
     std::unordered_set<std::size_t> query_order_pair;
     auto &req_terms = query_info->terms;
-    for (decltype(req_terms.size()) i = 1; i < req_terms.size(); ++i) {
+    for (decltype(req_terms.size()) i = 0; i < req_terms.size(); ++i) {
         auto term_sign_i = req_terms[i].token_sign;
 
         if (result->match_term_map.count(term_sign_i) < 1) {

@@ -159,9 +159,8 @@ public:
 // QU相关feature
 class ResInfo {
 public:
-    ResInfo();
-    ResInfo(const std::size_t &dsign,
-            std::shared_ptr<DocInfo> doc);
+    ResInfo(const std::size_t dsign = 0,
+            std::shared_ptr<DocInfo> doc = nullptr);
     void update_res_info();
     bool operator < (const ResInfo &rhs) const;
 

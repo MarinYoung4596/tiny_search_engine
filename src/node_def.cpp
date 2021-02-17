@@ -158,12 +158,8 @@ std::string QueryInfo::to_str() const {
 
 // -----------------------------------------------------------
 
-ResInfo::ResInfo() {
-    feature_mgr = std::make_shared<FeatureMgr>();
-}
-
 ResInfo::ResInfo(
-        const std::size_t &sign,
+        const std::size_t sign,
         std::shared_ptr<DocInfo> doc) :
     doc_sign(sign),
     doc_info(doc),
@@ -180,6 +176,10 @@ ResInfo::ResInfo(
 }
 
 void ResInfo::update_res_info() {
+    for (const auto &item : match_term_map) {
+        term_hits += item.second->hit_freq;
+    }
+/*
     uint16_t sum = 0;
     term_hits = std::accumulate(
         match_term_map.begin(), match_term_map.end(), sum,
@@ -188,6 +188,7 @@ void ResInfo::update_res_info() {
             return sum + item.second->hit_freq;
         }
     );
+*/
 }
 
 };
