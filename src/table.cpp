@@ -395,6 +395,7 @@ bool Table::recall(std::shared_ptr<QueryInfo> query_info,
     } // end of query term traversal
     for (auto it = res_map.begin(); it != res_map.end(); ++it) {
         it->second->update_res_info();
+        it->second->feature_mgr->add_feature("F_QU_HIT_TERM_CNT", it->second->term_hits);
         result.push_back(it->second);
     }
     // 1st_sort: sort by term_hits
@@ -402,8 +403,11 @@ bool Table::recall(std::shared_ptr<QueryInfo> query_info,
             [&](const std::shared_ptr<ResInfo> &lhs, const std::shared_ptr<ResInfo> &rhs) {
         if (lhs->term_hits != rhs->term_hits) {
             return lhs->term_hits > rhs->term_hits;
+        } else if (lhs->recall_by_syn != rhs->recall_by_syn) {
+            return lhs->recall_by_syn < rhs->recall_by_syn;
+        } else {
+            return lhs->doc_info->title_len < rhs->doc_info->title_len;
         }
-        return lhs->doc_info->title_len < rhs->doc_info->title_len;
     });
     return true;
 }
@@ -655,13 +659,12 @@ bool TinyEngine::_rank_results() {
     for (auto i = 0; i < results_info.size() && i < _max_2nd_sort_num; ++i) {
         _calc_features(results_info[i]);
     }
-
+#ifdef XGBOOST
     std::vector<std::unordered_map<std::string, float>> all_doc_features;
     for (auto i = 0; i < results_info.size() && i < _max_2nd_sort_num; ++i) {
         auto res = results_info[i];
         all_doc_features.push_back(res->feature_mgr->name_value_map);
     }
-#ifdef XGBOOST
     std::vector<float> predicts;
     auto ret = xgb_mgr->predict(all_doc_features, predicts);
     if (ret) {
@@ -682,7 +685,8 @@ bool TinyEngine::_rank_results() {
 
 bool TinyEngine::_calc_features(std::shared_ptr<ResInfo> result) {
     EXPECT_NE_OR_RETURN(nullptr, result, false);
-    EXPECT_FALSE_OR_RETURN(nullptr == result || result->match_term_map.empty(), false);
+    EXPECT_FALSE_OR_RETURN_LOGGED(result->match_term_map.empty(), false,
+                                  "match_term_map is empty!");
 
     _calc_vsm(result);
     _calc_bm25(result);
@@ -925,7 +929,7 @@ void TinyEngine::_calc_scatter_overlap(std::shared_ptr<ResInfo> result) {
 
     result->feature_mgr->add_feature("F_Q_TERM_CNT", query_term_cnt);
     result->feature_mgr->add_feature("F_U_TERM_CNT", title_term_cnt);
-    result->feature_mgr->add_feature("F_QU_HIT_TERM_CNT", hit_term_cnt);
+    //result->feature_mgr->add_feature("F_QU_HIT_TERM_CNT", hit_term_cnt);
     result->feature_mgr->add_feature("F_QU_TERM_CNT_CQR", term_cnt_cqr);
     result->feature_mgr->add_feature("F_QU_TERM_CNT_CTR", term_cnt_ctr);
     result->feature_mgr->add_feature("F_QU_TERM_CNT_COVERAGE", term_cnt_coverage);
