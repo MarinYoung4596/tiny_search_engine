@@ -26,6 +26,10 @@ std::string FeatureMgr::to_str() const {
     return j.dump();
 }
 
+bool FeatureMgr::is_empty() const {
+    return name_value_map.empty();
+}
+
 }; // end of namespace tiny_engine
 
 /* vim: set expandtab ts=4 sw=4 sts=4 tw=100: */

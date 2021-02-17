@@ -79,8 +79,8 @@ public:
             float module = 0.0);
 public:
     std::size_t doc_sign; // doc签名
-    std::string url; // url明文
     std::string title; // title明文
+    std::string url; // url明文
     uint32_t title_len; // unicode length
     std::vector<TermNode> terms; // title切词
     std::unordered_map<std::size_t, GlobalTermInfo> term_map;

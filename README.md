@@ -10,8 +10,6 @@
 - [ ] 所有term、doc、query 及table计算逻辑适配unicode、utf8长度
 - [x] 移除 segment 里计算 TermFreqMap 的逻辑, 改为切词完成之后计算
 - [x] MatchTermInfo适配，重写召回、部分特征计算逻辑
-- [ ] 计算title_diversity特征
-- [ ] 计算prefix_match特征
 - [ ] 重训相关性模型
 - [ ] ndcg 计算脚本
 

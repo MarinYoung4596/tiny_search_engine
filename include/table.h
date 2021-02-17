@@ -251,6 +251,10 @@ private:
      */
     void _calc_disorder(std::shared_ptr<ResInfo> result);
     std::size_t _calc_pair_sign(std::size_t term_sign_i, std::size_t term_sign_j);
+    /*
+     * @brief 计算散乱命中情况
+     */
+    void _calc_diversity(std::shared_ptr<ResInfo> result);
     /**
      * @brief 结果排序
      */

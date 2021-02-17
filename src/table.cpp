@@ -568,7 +568,7 @@ bool TinyEngine::search(const std::string &query,
 #endif
 
 #ifdef DEBUG
-        if (res->feature_mgr->name_value_map.empty()) {
+        if (res->feature_mgr->is_empty()) {
             LOG_WARNING("query=%s title=%s feature is empty!",
                         query.c_str(), title.c_str());
         }
@@ -691,6 +691,7 @@ bool TinyEngine::_calc_features(std::shared_ptr<ResInfo> result) {
     _calc_order_overlap(result);
     _calc_distance(result);
     _calc_disorder(result);
+    _calc_diversity(result);
  
     result->feature_mgr->add_feature("F_QU_PROXIMITY",
                 pow(0.9, result->miss + result->extra + result->disorder));
@@ -837,6 +838,7 @@ bool TinyEngine::_calc_cqr_ctr(std::shared_ptr<ResInfo> result) {
         LOG_WARNING("query[%s] title[%s] terms[%s] cqr=%.2f/%.2f=%.2f ctr=%.2f/%.2f=%.2f",
              query_info->query.c_str(),
              result->doc_info->title.c_str(),
+             result->term_hits,
              divisor,
              dividend_cqr,
              result->cqr,
@@ -1013,6 +1015,23 @@ std::size_t TinyEngine::_calc_pair_sign(std::size_t term_sign_1, std::size_t ter
             pair_sign);
     */
     return pair_sign;
+}
+
+void TinyEngine::_calc_diversity(std::shared_ptr<ResInfo> result) {
+    std::vector<uint16_t> req_hit_offsets;
+    std::vector<uint16_t> res_hit_offsets;
+    for (const auto &item : result->match_term_map) {
+        for (auto offset : item.second->in_query.offsets) {
+            req_hit_offsets.push_back(offset);
+        }
+        for (auto offset : item.second->in_doc.offsets) {
+            res_hit_offsets.push_back(offset);
+        }
+    }
+    auto req_diversity = MathUtil::standard_variance(req_hit_offsets);
+    auto res_diversity = MathUtil::standard_variance(res_hit_offsets);
+    auto diversity = res_diversity - req_diversity;
+    result->feature_mgr->add_feature("F_QU_HIT_DIVERSITY", diversity);
 }
 
 std::string TinyEngine::_title_highlight(std::shared_ptr<ResInfo> result) {

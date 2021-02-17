@@ -13,7 +13,8 @@
 
 namespace tiny_engine {
 
-TermNode::TermNode(std::size_t sign,
+TermNode::TermNode(
+        std::size_t sign,
         const std::string &txt,
         uint16_t off,
         uint16_t len,

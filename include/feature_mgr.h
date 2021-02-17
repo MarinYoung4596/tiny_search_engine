@@ -38,6 +38,7 @@ public:
     bool get_feature(const std::string &&key, Type &value) const;
 
     std::string to_str() const;
+    bool is_empty() const;
 
 public:
     std::unordered_map<std::string, float> name_value_map; // fname : fvalue
@@ -45,14 +46,12 @@ public:
 
 template <typename Type>
 void FeatureMgr::add_feature(const std::string &key, Type value) {
-    name_value_map[key] = MathUtil::round(
-                            static_cast<float>(value), 2);
+    name_value_map[key] = static_cast<float>(MathUtil::round(value, 3));
 }
 
 template <typename Type>
 void FeatureMgr::add_feature(const std::string &&key, Type value) {
-    name_value_map[key] = MathUtil::round(
-                            static_cast<float>(value), 2);
+    name_value_map[key] = static_cast<float>(MathUtil::round(value, 3));
 }
 
 template <typename Type>
