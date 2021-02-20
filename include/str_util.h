@@ -50,11 +50,11 @@ public:
     static bool is_start_with(const std::string &str, const std::string &prefix);
     static bool is_end_with(const std::string &str, const std::string &postfix);
 
-	static std::string wstr_to_str(const std::wstring &wstr);
-	static std::wstring str_to_wstr(const std::string &str);
+    static std::string wstr_to_str(const std::wstring &wstr);
+    static std::wstring str_to_wstr(const std::string &str);
 
-	static std::string gbk_to_utf8(const std::string &str);
-	static std::string utf8_to_gbk(const std::string &str);
+    static std::string gbk_to_utf8(const std::string &str);
+    static std::string utf8_to_gbk(const std::string &str);
 
     static std::size_t str_to_sign(const std::string &str);
     

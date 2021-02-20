@@ -17,22 +17,22 @@ std::string StrUtil::left_trim(const std::string &str) {
     if (str.empty()) {
         return str;
     }
-	std::size_t head = 0;
-	for (; head < str.size() && std::isspace(str[head]); ++head) {}
-	return head < str.size() ? \
-		str.substr(head, str.size() - head + 1) : \
-		std::string();
+    std::size_t head = 0;
+    for (; head < str.size() && std::isspace(str[head]); ++head) {}
+    return head < str.size() ? \
+        str.substr(head, str.size() - head + 1) : \
+        std::string();
 }
 
 std::string StrUtil::right_trim(const std::string &str) {
     if (str.empty()) {
         return str;
     }
-	std::size_t tail = str.size() - 1;
-	for (; tail >= 0 && std::isspace(str[tail]); --tail) {}
-	return tail < 0 ? \
-		std::string() : \
-		str.substr(0, tail + 1);
+    std::size_t tail = str.size() - 1;
+    for (; tail >= 0 && std::isspace(str[tail]); --tail) {}
+    return tail < 0 ? \
+        std::string() : \
+        str.substr(0, tail + 1);
 }
 
 std::string StrUtil::trim(const std::string &str) {
@@ -43,9 +43,9 @@ std::string StrUtil::trim(const std::string &str) {
     for (; head < str.size() && std::isspace(str[head]); ++head) {} 
     std::size_t tail = str.size() - 1;
     for (; tail >= head && std::isspace(str[tail]); --tail) {} 
-	return head > tail ? \
-		std::string() : \
-		str.substr(head, tail - head + 1);
+    return head > tail ? \
+        std::string() : \
+        str.substr(head, tail - head + 1);
 }
 
 std::string StrUtil::left_trim_with(const std::string &str, char ch) {
@@ -53,10 +53,10 @@ std::string StrUtil::left_trim_with(const std::string &str, char ch) {
         return str;
     }
     std::size_t head = 0;
-	for (; head < str.size() && (str[head] == ch); ++head) {}
-	return head < str.size() ? \
-		str.substr(head, str.size() - head + 1) : \
-		std::string();
+    for (; head < str.size() && (str[head] == ch); ++head) {}
+    return head < str.size() ? \
+        str.substr(head, str.size() - head + 1) : \
+        std::string();
 }
 
 std::string StrUtil::right_trim_with(const std::string &str, char ch) {
@@ -64,10 +64,10 @@ std::string StrUtil::right_trim_with(const std::string &str, char ch) {
         return str;
     }
     std::size_t tail = str.size() - 1;
-	for (; tail >= 0 && (str[tail] == ch); --tail) {}
-	return tail < 0 ? \
-		std::string() : \
-		str.substr(0, tail + 1);
+    for (; tail >= 0 && (str[tail] == ch); --tail) {}
+    return tail < 0 ? \
+        std::string() : \
+        str.substr(0, tail + 1);
 }
 
 std::string StrUtil::trim_with(const std::string &str, char ch) {
@@ -78,33 +78,33 @@ std::string StrUtil::trim_with(const std::string &str, char ch) {
     for (; head < str.size() && (str[head] == ch); ++head) {} 
     std::size_t tail = str.size() - 1;
     for (; tail >= head && (str[tail] == ch); --tail) {} 
-	return head > tail ? \
-		std::string() : \
-		str.substr(head, tail - head + 1);
+    return head > tail ? \
+        std::string() : \
+        str.substr(head, tail - head + 1);
 }
 
 std::string StrUtil::wstr_to_str(const std::wstring &wstr) {
-	/*
-	using F = std::codecvt_byname<wchar_t, char, std::mbstate_t>;
-	std::wstring_convert<F> conv(new F("CHS"));
-	return conv.to_bytes(wstr);
-	*/
+    /*
+    using F = std::codecvt_byname<wchar_t, char, std::mbstate_t>;
+    std::wstring_convert<F> conv(new F("CHS"));
+    return conv.to_bytes(wstr);
+    */
     // TODO
     return std::string();
 }
 
 std::wstring StrUtil::str_to_wstr(const std::string &str) {
-	/*
-	using F = std::codecvt_byname<wchar_t, char, std::mbstate_t>;
-	std::wstring_convert<F> conv(new F("CHS"));
-	return conv.from_bytes(str);
-	*/
+    /*
+    using F = std::codecvt_byname<wchar_t, char, std::mbstate_t>;
+    std::wstring_convert<F> conv(new F("CHS"));
+    return conv.from_bytes(str);
+    */
     // TODO
     return std::wstring();
 }
 
 std::string StrUtil::utf8_to_gbk(const std::string &str) {
-	// TODO
+    // TODO
     return std::string();
 }
 
@@ -135,8 +135,8 @@ std::size_t StrUtil::get_char_len(const char* str) {
 }
 
 std::string StrUtil::to_lower_case(const std::string &str) {
-	std::string result(str.size(), '\0');
-	std::transform(str.begin(), str.end(), result.begin(), ::tolower);
+    std::string result(str.size(), '\0');
+    std::transform(str.begin(), str.end(), result.begin(), ::tolower);
     return result;
 }
 
@@ -230,12 +230,12 @@ bool StrUtil::is_upper_str(const std::string &str) {
 
 bool StrUtil::is_start_with(const std::string &str, const std::string &prefix) {
     return str.size() >= prefix.size()
-		&& std::equal(prefix.cbegin(), prefix.cend(), str.cbegin());
+        && std::equal(prefix.cbegin(), prefix.cend(), str.cbegin());
 }
 
 bool StrUtil::is_end_with(const std::string &str, const std::string &postfix) {
     return str.size() >= postfix.size()
-		&& std::equal(postfix.crbegin(), postfix.crend(), str.crbegin());
+        && std::equal(postfix.crbegin(), postfix.crend(), str.crbegin());
 }
 
 std::string StrUtil::to_str(std::size_t size, const char* fmt, ...) {

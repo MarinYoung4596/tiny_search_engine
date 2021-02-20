@@ -4,7 +4,9 @@
 *   @file:    segment.h
 *   @author:  marinyoung@163.com
 *   @date:    2018/12/11 11:30:06
-*   @brief  
+*   @brief:
+*   @ref:     https://github.com/yanyiwu/libcppjieba/blob/master/include/Application.hpp
+              https://github.com/yanyiwu/cppjieba/blob/master/test/demo.cpp
 *
 *****************************************************************/
 
@@ -21,11 +23,7 @@
 #include <memory>
 
 namespace tiny_engine {
-/**
- * ref:
- * https://github.com/yanyiwu/libcppjieba/blob/master/include/Application.hpp
- * https://github.com/yanyiwu/cppjieba/blob/master/test/demo.cpp
- */
+
 enum TOKEN_TYPE {
     MP_MODE = 1,
     HMM_MODE = 2,

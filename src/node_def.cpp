@@ -136,7 +136,8 @@ MatchTermInfo::MatchTermInfo():
     term_len(0),
     hit_freq(0),
     idf(0.0),
-    is_syn_match(false) {}
+    is_syn_match(false),
+    is_stopword(false) {}
 
 std::string MatchTermInfo::to_str() const {
     return StrUtil::format("{},qf={},df={}",

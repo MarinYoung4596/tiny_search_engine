@@ -360,14 +360,14 @@ bool Table::recall(std::shared_ptr<QueryInfo> query_info,
             auto iter = res_map.find(doc.doc_sign);
             if (iter != res_map.end()) { // 当前 doc 在 res_map 中
                 if (iter->second->match_term_map.count(term.token_sign) > 0) {
-                    continue; // res_map中已存在该 term的信息，不更新
+                    continue; // 召回结果中已存在该term的信息，不更新
                 }
-                // 不存在，更新 res 里的 match_term_info 信息
+                // 否则,更新result里的match_term_info信息
                 auto doc_info = iter->second->doc_info;
                 auto mti = std::make_shared<MatchTermInfo>();
                 fill_match_term_info(term_info, query_info, doc_info, mti);
                 iter->second->match_term_map.insert(std::make_pair(term.token_sign, mti));
-            } else { // 否则，插入 res_map
+            } else { // 否则，当前结果插入 res_map
                 process_new_doc(query_info, term_info, doc.doc_sign, false, i, res_map);
             }
         }
@@ -451,6 +451,7 @@ bool Table::fill_match_term_info(
     mti->term_txt = term_info->term_txt;
     mti->term_len = term_info->term_len;
     mti->idf = term_info->idf;
+    mti->is_stopword = hit_stopword(mti->term_sign);
 
     // 从 query 中取信息
     if (mti->is_syn_match) {
@@ -795,7 +796,7 @@ float TinyEngine::_calc_bm25_r_factor(
 bool TinyEngine::_calc_cqr_ctr(std::shared_ptr<ResInfo> result) {
     float divisor = 0.0;
     for (const auto &item : result->match_term_map) {
-        if (table->hit_stopword(item.first)) {
+        if (item.second->is_stopword) {
             continue;
         }
         divisor += item.second->hit_freq * item.second->idf;

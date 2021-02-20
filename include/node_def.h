@@ -140,6 +140,7 @@ public:
     float idf;
     bool is_syn_match;
     float syn_belief; // syn_confidence
+    bool is_stopword;
 };
 
 // query相关feature
@@ -154,7 +155,7 @@ public:
     uint32_t query_len; // unicode length
     std::vector<TermNode> terms; // query切词
     std::vector<std::vector<SynTermNode>> syns; // 每个term的同义词改写, 与term切词对齐
-	std::unordered_map<std::size_t, GlobalTermInfo> term_map; // key=sign
+    std::unordered_map<std::size_t, GlobalTermInfo> term_map; // key=sign
     float vec_module; // terms tf*idf 向量的模
     float wei_sum; // ∑ idf
 };
@@ -170,11 +171,10 @@ public:
 public:
     std::size_t doc_sign; // doc签名
     std::shared_ptr<DocInfo> doc_info; // doc正排信息
-
-    bool recall_by_syn; // 是否由同义词召回
     std::unordered_map<uint64_t, std::shared_ptr<MatchTermInfo>> match_term_map;
     std::shared_ptr<FeatureMgr> feature_mgr;
 
+    bool recall_by_syn; // 是否由同义词召回
     // qu相关性打分的特征
     uint16_t term_hits; // doc与query的term交集个数(包含重复)
     float vsm;
