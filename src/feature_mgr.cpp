@@ -34,6 +34,14 @@ std::unordered_map<std::string, float> FeatureMgr::get_features() const {
     return name_value_map;
 }
 
+float FeatureMgr::get_feature(const std::string &name, float default_value) const {
+    auto iter = name_value_map.find(name);
+    if (iter != name_value_map.end()) {
+        return iter->second;
+    }
+    return default_value;
+}
+
 }; // end of namespace tiny_engine
 
 /* vim: set expandtab ts=4 sw=4 sts=4 tw=100: */

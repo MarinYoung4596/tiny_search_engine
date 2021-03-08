@@ -706,7 +706,7 @@ bool TinyEngine::_calc_features(std::shared_ptr<ResInfo> result) {
  
     result->feature_mgr->add_feature("F_QU_PROXIMITY",
                 pow(0.9, result->miss + result->extra + result->disorder));
-    result->final_score = result->vsm; //result->cqr * result->ctr;
+    result->final_score = result->cqr * result->ctr;
     return true;
 }
 
@@ -858,24 +858,36 @@ void TinyEngine::_calc_order_overlap(std::shared_ptr<ResInfo> result) {
                         static_cast<float>(term_lcseq) / req_terms.size());
     result->feature_mgr->add_feature("F_QU_TERM_LCSEQ_OVER_U",
                         static_cast<float>(term_lcseq) / res_terms.size());
+    result->feature_mgr->add_feature("F_QU_TERM_LCSEQ_COVERAGE",
+                        result->feature_mgr->get_feature("F_QU_TERM_LCSEQ_OVER_Q") *
+                        result->feature_mgr->get_feature("F_QU_TERM_LCSEQ_OVER_U"));
 
     result->feature_mgr->add_feature("F_QU_TERM_LCSTR", term_lcstr);
     result->feature_mgr->add_feature("F_QU_TERM_LCSTR_OVER_Q",
                         static_cast<float>(term_lcstr) / req_terms.size());
     result->feature_mgr->add_feature("F_QU_TERM_LCSTR_OVER_U",
                         static_cast<float>(term_lcstr) / res_terms.size());
+    result->feature_mgr->add_feature("F_QU_TERM_LCSTR_COVERAGE",
+                        result->feature_mgr->get_feature("F_QU_TERM_LCSTR_OVER_Q") *
+                        result->feature_mgr->get_feature("F_QU_TERM_LCSTR_OVER_Q")); 
 
     result->feature_mgr->add_feature("F_QU_STR_LCSEQ", str_lcseq);
     result->feature_mgr->add_feature("F_QU_STR_LCSEQ_OVER_Q",
                         static_cast<float>(str_lcseq) / query.size());
     result->feature_mgr->add_feature("F_QU_STR_LCSEQ_OVER_U",
                         static_cast<float>(str_lcseq) / title.size());
+    result->feature_mgr->add_feature("F_QU_STR_LCSEQ_COVERAGE",
+                        result->feature_mgr->get_feature("F_QU_STR_LCSEQ_OVER_Q") *
+                        result->feature_mgr->get_feature("F_QU_STR_LCSEQ_OVER_U"));
 
     result->feature_mgr->add_feature("F_QU_STR_LCSTR", str_lcstr);
     result->feature_mgr->add_feature("F_QU_STR_LCSTR_OVER_Q",
                         static_cast<float>(str_lcstr) / query.size());
     result->feature_mgr->add_feature("F_QU_STR_LCSTR_OVER_U",
                         static_cast<float>(str_lcstr) / title.size());
+    result->feature_mgr->add_feature("F_QU_STR_LCSTR_COVERAGE",
+                        result->feature_mgr->get_feature("F_QU_STR_LCSTR_OVER_Q") *
+                        result->feature_mgr->get_feature("F_QU_STR_LCSTR_OVER_U"));
 }
 
 void TinyEngine::_calc_scatter_overlap(std::shared_ptr<ResInfo> result) {
@@ -929,11 +941,18 @@ void TinyEngine::_calc_distance(std::shared_ptr<ResInfo> result) {
                         static_cast<float>(term_edit_distance) / req_terms.size());
     result->feature_mgr->add_feature("F_QU_TERM_EDIST_OVER_U",
                         static_cast<float>(term_edit_distance) / res_terms.size());
+    result->feature_mgr->add_feature("F_QU_TERM_EDIST_COVERAGE",
+                        result->feature_mgr->get_feature("F_QU_TERM_EDIST_OVER_Q") *
+                        result->feature_mgr->get_feature("F_QU_TERM_EDIST_OVER_U"));
+
     result->feature_mgr->add_feature("F_QU_STR_EDIST", str_edit_distance);
     result->feature_mgr->add_feature("F_QU_STR_EDIST_OVER_Q",
                         static_cast<float>(str_edit_distance) / query_info->query_len);
     result->feature_mgr->add_feature("F_QU_STR_EDIST_OVER_U",
                         static_cast<float>(str_edit_distance) / result->doc_info->title_len);
+    result->feature_mgr->add_feature("F_QU_STR_EDIST_COVERAGE",
+                        result->feature_mgr->get_feature("F_QU_STR_EDIST_OVER_Q") *
+                        result->feature_mgr->get_feature("F_QU_STR_EDIST_OVER_U"));
 }
 
 void TinyEngine::_calc_disorder(std::shared_ptr<ResInfo> result) {

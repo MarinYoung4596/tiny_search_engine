@@ -31,14 +31,9 @@ public:
     template <typename Type>
     void add_feature(const std::string &&key, Type value);
 
-    template <typename Type>
-    bool get_feature(const std::string &key, Type &value) const;
-
-    template <typename Type>
-    bool get_feature(const std::string &&key, Type &value) const;
-
     std::string to_str() const;
     bool is_empty() const;
+    float get_feature(const std::string &key, float defult_value = 0.0) const;
     std::unordered_map<std::string, float> get_features() const;
 
 public:
@@ -53,21 +48,6 @@ void FeatureMgr::add_feature(const std::string &key, Type value) {
 template <typename Type>
 void FeatureMgr::add_feature(const std::string &&key, Type value) {
     name_value_map[key] = static_cast<float>(MathUtil::round(value, 3));
-}
-
-template <typename Type>
-bool FeatureMgr::get_feature(const std::string &key, Type &value) const {
-    auto iter = name_value_map.find(key);
-    if (iter != name_value_map.end()) {
-        value = iter->second;
-        return true;
-    }
-    return false;
-}
-
-template <typename Type>
-bool FeatureMgr::get_feature(const std::string &&key, Type &value) const {
-    return get_feature(key, value);
 }
 
 }; // end of namespace tiny_engine
